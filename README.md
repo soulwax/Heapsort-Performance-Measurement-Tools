@@ -96,7 +96,7 @@ The project includes comprehensive tools for measuring and analyzing the perform
 
 All sort operations automatically include timing information that measures **only the sorting algorithm** (not file I/O or other operations). The time is displayed in appropriate units (ns, μs, ms, or s) based on the magnitude:
 
-```
+```plaintext
 Sorting algorithm performance: Sorted 1000 items in 1.25 ms
 ```
 
