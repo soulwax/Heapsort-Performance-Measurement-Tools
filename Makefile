@@ -47,7 +47,7 @@ run-benchmark: benchmark heapsort genrand_f
 # Run benchmark with custom settings (example)
 run-custom-benchmark: benchmark heapsort genrand_f
 	@echo "Running custom benchmark..."
-	./$(BIN_DIR)/benchmark --min 500 --max 10000 --step 500 --repeats 5
+	./$(BIN_DIR)/benchmark --min 500 --max 100000 --step 500 --repeats 5
 
 # Usage examples:
 # Compile all:
