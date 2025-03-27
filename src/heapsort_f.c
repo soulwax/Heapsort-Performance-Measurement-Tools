@@ -6,40 +6,64 @@
 #include <ctype.h>
 #include "common.h"
 
-void swap(int* a, int* b) {
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
-
-void heapify(int a[], int n, int i) {
-    int largest = i;
-    int left = 2 * i + 1;
-    int right = 2 * i + 2;
-
-    if (left < n && a[largest] < a[left])
-        largest = left;
-
-    if (right < n && a[largest] < a[right])
-        largest = right;
-
-    if (largest != i) {
-        swap(&a[i], &a[largest]);
-        heapify(a, n, largest);
+// Bitwise XOR swap (no temporary variable needed)
+static inline void swap(int* a, int* b) {
+    if (a != b) {  // Critical check: XOR swap fails if a and b are the same address
+        *a ^= *b;
+        *b ^= *a;
+        *a ^= *b;
     }
 }
 
-void buildMaxHeap(int a[], int n) {
-    int i;
-    for (i = n / 2 - 1; i >= 0; i--)
-        heapify(a, n, i);
+// Optimized non-recursive heapify function with bit-shift operations
+static void heapify(int a[], int n, int i) {
+    int largest;
+    int temp;
+
+    while (1) {
+        int left = (i << 1) + 1;    // Left child: 2*i + 1
+        int right = (i << 1) + 2;   // Right child: 2*i + 2
+        largest = i;
+
+        if (left < n && a[left] > a[largest])
+            largest = left;
+
+        if (right < n && a[right] > a[largest])
+            largest = right;
+
+        if (largest == i)
+            break;
+
+        // Swap using temporary variable (often faster than XOR swap in practice)
+        temp = a[i];
+        a[i] = a[largest];
+        a[largest] = temp;
+
+        i = largest;
+    }
 }
 
+// Build max heap using bit-shift for index calculation
+static void buildMaxHeap(int a[], int n) {
+    // Start from last non-leaf node and heapify all nodes in reverse order
+    for (int i = (n >> 1) - 1; i >= 0; i--) {
+        heapify(a, n, i);
+    }
+}
+
+// Optimized heap sort function
 void heapSort(int a[], int n) {
-    int i;
+    // Build a max heap
     buildMaxHeap(a, n);
-    for (i = n - 1; i >= 0; i--) {
-        swap(&a[0], &a[i]);
+
+    // Extract elements from the heap one by one
+    for (int i = n - 1; i > 0; i--) {
+        // Move current root to end
+        int temp = a[0];
+        a[0] = a[i];
+        a[i] = temp;
+
+        // Call heapify on the reduced heap
         heapify(a, i, 0);
     }
 }
