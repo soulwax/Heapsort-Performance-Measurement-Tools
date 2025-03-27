@@ -185,7 +185,7 @@ void print_usage(const char* program_name) {
 int main(int argc, char* argv[]) {
     int min_size = 1000;
     int max_size = 100000;
-    int step_size = 10000;
+    int step_size = 1000;
     int repeats = 3;
 
     // Parse command line arguments
