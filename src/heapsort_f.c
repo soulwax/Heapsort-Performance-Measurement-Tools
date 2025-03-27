@@ -4,60 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <time.h>
-
-// Function to create a directory if it doesn't exist
-int create_directory(const char* path) {
-    struct stat st = { 0 };
-
-    if (stat(path, &st) == -1) {
-#ifdef _WIN32
-        if (mkdir(path) != 0) {
-#else
-        if (mkdir(path, 0755) != 0) {
-#endif
-            perror("Failed to create directory");
-            return 0;
-        }
-        printf("Created directory: %s\n", path);
-    }
-
-    return 1;
-}
-
-// Function to extract filename from path
-const char* get_filename(const char* path) {
-    const char* filename = strrchr(path, '/');
-
-    if (filename != NULL) {
-        // Move past the '/'
-        return filename + 1;
-    }
-
-    return path; // No '/' found, return the original path
-}
-
-// Function to format time in appropriate units
-void format_time(double time_seconds, char* buffer, size_t buffer_size) {
-    if (time_seconds < 0.000001) {
-        // Nanoseconds (less than 1 microsecond)
-        sprintf(buffer, "%.2f ns", time_seconds * 1e9);
-    }
-    else if (time_seconds < 0.001) {
-        // Microseconds (less than 1 millisecond)
-        sprintf(buffer, "%.2f μs", time_seconds * 1e6);
-    }
-    else if (time_seconds < 1.0) {
-        // Milliseconds (less than 1 second)
-        sprintf(buffer, "%.2f ms", time_seconds * 1e3);
-    }
-    else {
-        // Seconds
-        sprintf(buffer, "%.2f s", time_seconds);
-    }
-}
+#include "common.h"
 
 void swap(int* a, int* b) {
     int temp = *a;
@@ -98,7 +45,7 @@ void heapSort(int a[], int n) {
 }
 
 // Count the number of integers in a file
-int countIntegers(FILE * file) {
+int countIntegers(FILE* file) {
     int count = 0;
     char buffer[1024];
 
@@ -131,7 +78,7 @@ int countIntegers(FILE * file) {
 }
 
 // Read integers from a file into an array
-int* readIntegers(FILE * file, int* count) {
+int* readIntegers(FILE* file, int* count) {
     *count = countIntegers(file);
 
     if (*count == 0)
@@ -169,7 +116,7 @@ int* readIntegers(FILE * file, int* count) {
 }
 
 // Write sorted integers to a file
-void writeIntegers(FILE * file, int array[], int count) {
+void writeIntegers(FILE* file, int array[], int count) {
     for (int i = 0; i < count; i++) {
         fprintf(file, "%d", array[i]);
         if (i < count - 1)

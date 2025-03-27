@@ -1,10 +1,12 @@
 # File: Makefile
 
 CC = gcc
-CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip
+CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip -Wl,-no_pie -Wl,-dead_strip_dylibs
 BIN_DIR = bin
 SRC_DIR = src
+OBJ_DIR = obj
 TARGETS = heapsort genrand_f benchmark
+COMMON_OBJ = $(OBJ_DIR)/common.o
 
 .PHONY: all clean directories
 
@@ -12,21 +14,29 @@ all: directories $(TARGETS)
 
 directories:
 	mkdir -p $(BIN_DIR)
+	mkdir -p $(OBJ_DIR)
 
-heapsort: $(SRC_DIR)/heapsort_f.c
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(COMMON_OBJ): $(SRC_DIR)/common.c $(SRC_DIR)/common.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+heapsort: $(SRC_DIR)/heapsort_f.c $(COMMON_OBJ)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
-genrand_f: $(SRC_DIR)/genrand_f.c
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
+genrand_f: $(SRC_DIR)/genrand_f.c $(COMMON_OBJ)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
-benchmark: $(SRC_DIR)/benchmark.c
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
+benchmark: $(SRC_DIR)/benchmark.c $(COMMON_OBJ)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
 clean:
 	rm -rf $(BIN_DIR)
+	rm -rf $(OBJ_DIR)
 	rm -f .temp_sort_output .latest_file
 
 # Run benchmark with default settings

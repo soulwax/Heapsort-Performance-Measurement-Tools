@@ -4,61 +4,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <errno.h>
-#include <stdint.h>
-
-// Format time into appropriate units (ns, μs, ms, s)
-void format_time(double time_seconds, char* buffer, size_t buffer_size) {
-    if (time_seconds < 0.000001) {
-        // Nanoseconds (less than 1 microsecond)
-        sprintf(buffer, "%.2f ns", time_seconds * 1e9);
-    }
-    else if (time_seconds < 0.001) {
-        // Microseconds (less than 1 millisecond)
-        sprintf(buffer, "%.2f μs", time_seconds * 1e6);
-    }
-    else if (time_seconds < 1.0) {
-        // Milliseconds (less than 1 second)
-        sprintf(buffer, "%.2f ms", time_seconds * 1e3);
-    }
-    else {
-        // Seconds
-        sprintf(buffer, "%.2f s", time_seconds);
-    }
-}
-
-// Simple hash function (djb2)
-uint64_t hash_string(const char* str) {
-    uint64_t hash = 5381;
-    int c;
-
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
-    }
-
-    return hash;
-}
-
-// Create directory if it doesn't exist
-int create_directory(const char* path) {
-    struct stat st = { 0 };
-
-    if (stat(path, &st) == -1) {
-#ifdef _WIN32
-        if (mkdir(path) != 0) {
-#else
-        if (mkdir(path, 0755) != 0) {
-#endif
-            perror("Failed to create directory");
-            return 0;
-        }
-        printf("Created directory: %s\n", path);
-    }
-
-    return 1;
-}
+#include "common.h"
 
 int main(int argc, char* argv[]) {
     int count = 100; // Default number of random numbers
@@ -137,7 +83,7 @@ int main(int argc, char* argv[]) {
     // Calculate hash of contents
     uint64_t hash_value = hash_string(content_buffer);
     char filename[100];
-    sprintf(filename, "input/randnum_%llx.txt", hash_value);
+    sprintf(filename, "input/randnum_%" PRIx64 ".txt", hash_value);
 
     // Write to file
     FILE* file = fopen(filename, "w");
