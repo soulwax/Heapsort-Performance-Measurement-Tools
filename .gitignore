@@ -275,5 +275,3 @@ input/*
 
 output/*
 !output/randnum_fixed.txt
-
-benchmark_results/
