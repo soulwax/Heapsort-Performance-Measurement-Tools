@@ -81,12 +81,12 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-./bin
-./build
-./dist
-./lib
-./node_modules
-./tmp
-./vendor
-./.sass-cache
-./.bundle
+bin/
+build/
+dist/
+lib/
+node_modules/
+tmp/
+vendor/
+.sass-cache/
+.bundle/
