@@ -1,14 +1,51 @@
 CC = gcc
 CFLAGS = -g -Wall -O2 -arch arm64
-TARGET = bin/heapsort
+BIN_DIR = bin
+TARGETS = heapsort gen_randf
 
-$(TARGET): main.c
-	$(CC) $(CFLAGS) -o $(TARGET) main.c
+.PHONY: all clean directories
+
+all: directories $(TARGETS)
+
+directories:
+	mkdir -p $(BIN_DIR)
+
+heapsort: main.c
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
+	@echo "Built $@ in $(BIN_DIR)/"
+
+gen_randf: gen_randf.c
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
+	@echo "Built $@ in $(BIN_DIR)/"
 
 clean:
-	rm -f $(TARGET)
+	rm -rf $(BIN_DIR)
 
-# usage: 
-# compile: make
-# run: ./heapsort <arguements being e.g unsorted numbers>
-# clean: make clean
+# Usage examples: 
+# Compile all:
+#   make
+# 
+# Compile specific target:
+#   make heapsort
+#   make gen_randf
+#
+# Run heapsort with command line arguments:
+#   ./bin/heapsort 5 2 9 1 7 4
+#
+# Run heapsort with input file:
+#   ./bin/heapsort -f input.txt
+#
+# Run heapsort with input file and output file:
+#   ./bin/heapsort -f input.txt -o sorted.txt
+#
+# Run gen_randf with default settings (100 numbers between 1-1000):
+#   ./bin/gen_randf
+#
+# Generate 500 random numbers:
+#   ./bin/gen_randf -c 500
+#
+# Generate 200 random numbers between -100 and 100:
+#   ./bin/gen_randf -c 200 -min -100 -max 100
+#
+# Clean:
+#   make clean
