@@ -91,7 +91,7 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
 
         // Parse the time value
         double time_value;
-        char unit[10];
+        // char unit[10];
         if (strstr(time_str, "ns")) {
             sscanf(time_str, "%lf ns", &time_value);
             time_value /= 1e9;  // Convert ns to seconds

@@ -55,10 +55,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-        }
+    }
 
     return 1;
-    }
+}
 
 int main(int argc, char* argv[]) {
     int count = 100; // Default number of random numbers
@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
     // Calculate hash of contents
     uint64_t hash_value = hash_string(content_buffer);
     char filename[100];
-    sprintf(filename, "input/randnum_%lx.txt", hash_value);
+    sprintf(filename, "input/randnum_%llx.txt", hash_value);
 
     // Write to file
     FILE* file = fopen(filename, "w");
