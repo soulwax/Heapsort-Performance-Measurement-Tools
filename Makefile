@@ -1,7 +1,7 @@
 # File: Makefile
 
 CC = gcc
-CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip -Wl,-no_pie -Wl,-dead_strip_dylibs
+CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip
 BIN_DIR = bin
 SRC_DIR = src
 OBJ_DIR = obj
@@ -38,6 +38,10 @@ clean:
 	rm -rf $(BIN_DIR)
 	rm -rf $(OBJ_DIR)
 	rm -f .temp_sort_output .latest_file
+	find input -type f -not -name "randnum_fixed.txt" -exec rm -f {} \;
+	find output -type f -not -name "randnum_fixed.txt" -exec rm -f {} \;
+	rm -rf benchmark_results
+	rm -rf benchmark_plots
 
 # Run benchmark with default settings
 run-benchmark: benchmark heapsort genrand_f
@@ -47,7 +51,7 @@ run-benchmark: benchmark heapsort genrand_f
 # Run benchmark with custom settings (example)
 run-custom-benchmark: benchmark heapsort genrand_f
 	@echo "Running custom benchmark..."
-	./$(BIN_DIR)/benchmark --min 500 --max 100000 --step 500 --repeats 5
+	./$(BIN_DIR)/benchmark --min 500 --max 10000 --step 500 --repeats 5
 
 # Usage examples:
 # Compile all:
