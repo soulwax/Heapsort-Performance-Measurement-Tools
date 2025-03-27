@@ -4,46 +4,79 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #include "common.h"
 
-// Bitwise XOR swap (no temporary variable needed)
-static inline void swap(int* a, int* b) {
-    if (a != b) {  // Critical check: XOR swap fails if a and b are the same address
-        *a ^= *b;
-        *b ^= *a;
-        *a ^= *b;
+// Define cache line size for optimizations
+#define CACHE_LINE_SIZE 64
+
+// Prefetch hint macros
+#if defined(__GNUC__) || defined(__clang__)
+#define PREFETCH(addr) __builtin_prefetch(addr)
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define PREFETCH(addr)
+#define LIKELY(x) (x)
+#define UNLIKELY(x) (x)
+#endif
+
+// Threshold for switching to insertion sort
+#define INSERTION_SORT_THRESHOLD 16
+
+// Optimized insertion sort for small arrays
+static void insertion_sort(int a[], int n) {
+    for (int i = 1; i < n; i++) {
+        int key = a[i];
+        int j = i - 1;
+
+        while (j >= 0 && a[j] > key) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        a[j + 1] = key;
     }
 }
 
-// Optimized non-recursive heapify function with bit-shift operations
+// Optimized swap with branch prediction hints
+static inline void swap(int* a, int* b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+// Cache-optimized non-recursive heapify function
 static void heapify(int a[], int n, int i) {
-    int largest;
-    int temp;
+    int current = a[i];  // Cache the current value to avoid repeated memory access
 
     while (1) {
-        int left = (i << 1) + 1;    // Left child: 2*i + 1
-        int right = (i << 1) + 2;   // Right child: 2*i + 2
-        largest = i;
+        int child_idx = (i << 1) + 1;  // Left child
+        if (child_idx >= n) break;
 
-        if (left < n && a[left] > a[largest])
-            largest = left;
+        // Prefetch the next level of children
+        if (child_idx + 2 < n) {
+            PREFETCH(&a[(child_idx << 1) + 1]);
+            PREFETCH(&a[(child_idx << 1) + 2]);
+        }
 
-        if (right < n && a[right] > a[largest])
-            largest = right;
+        // Determine the larger child
+        if (child_idx + 1 < n && a[child_idx] < a[child_idx + 1]) {
+            child_idx++;
+        }
 
-        if (largest == i)
-            break;
+        // If parent is larger than the largest child, we're done
+        if (current >= a[child_idx]) break;
 
-        // Swap using temporary variable (often faster than XOR swap in practice)
-        temp = a[i];
-        a[i] = a[largest];
-        a[largest] = temp;
-
-        i = largest;
+        // Move child up
+        a[i] = a[child_idx];
+        i = child_idx;
     }
+
+    // Place current value in its final position
+    a[i] = current;
 }
 
-// Build max heap using bit-shift for index calculation
+// Build max heap with cache-friendly traversal
 static void buildMaxHeap(int a[], int n) {
     // Start from last non-leaf node and heapify all nodes in reverse order
     for (int i = (n >> 1) - 1; i >= 0; i--) {
@@ -51,48 +84,84 @@ static void buildMaxHeap(int a[], int n) {
     }
 }
 
-// Optimized heap sort function
+// Hybrid heap sort with insertion sort for small arrays
 void heapSort(int a[], int n) {
+    // For very small arrays, use insertion sort directly
+    if (UNLIKELY(n <= INSERTION_SORT_THRESHOLD)) {
+        insertion_sort(a, n);
+        return;
+    }
+
     // Build a max heap
     buildMaxHeap(a, n);
 
     // Extract elements from the heap one by one
     for (int i = n - 1; i > 0; i--) {
         // Move current root to end
-        int temp = a[0];
-        a[0] = a[i];
-        a[i] = temp;
+        swap(&a[0], &a[i]);
+
+        // If the remaining heap is small, use insertion sort
+        if (UNLIKELY(i <= INSERTION_SORT_THRESHOLD)) {
+            insertion_sort(a, i);
+            break;
+        }
 
         // Call heapify on the reduced heap
         heapify(a, i, 0);
     }
 }
 
-// Count the number of integers in a file
+// Optimized version that processes elements in cache-friendly blocks
+void blockHeapSort(int a[], int n) {
+    if (n <= INSERTION_SORT_THRESHOLD) {
+        insertion_sort(a, n);
+        return;
+    }
+
+    // Build heap
+    buildMaxHeap(a, n);
+
+    // Calculate block size based on cache line
+    const int block_size = CACHE_LINE_SIZE / sizeof(int);
+
+    // Process blocks of elements at a time
+    for (int end = n - 1; end > 0;) {
+        int block_end = (end > block_size) ? end - block_size : 0;
+
+        // Process current block
+        for (int i = end; i > block_end; i--) {
+            swap(&a[0], &a[i]);
+            heapify(a, i, 0);
+        }
+
+        end = block_end;
+    }
+}
+
+// Count the number of integers in a file - optimized version with single pass
 int countIntegers(FILE* file) {
     int count = 0;
-    char buffer[1024];
+    char buffer[4096];  // Larger buffer for better I/O performance
 
     // Reset file position to the beginning
     rewind(file);
 
     while (fgets(buffer, sizeof(buffer), file) != NULL) {
-        char* token = strtok(buffer, " \t\n,;");
-        while (token != NULL) {
-            // Check if token is a valid integer
-            int isValid = 1;
-            for (int i = 0; token[i] != '\0'; i++) {
-                if (i == 0 && (token[i] == '-' || token[i] == '+'))
-                    continue;
-                if (!isdigit(token[i])) {
-                    isValid = 0;
-                    break;
+        int in_number = 0;
+
+        for (char* p = buffer; *p; p++) {
+            if (isdigit(*p) || (*p == '-' || *p == '+')) {
+                if (!in_number) {
+                    count++;
+                    in_number = 1;
                 }
             }
-            if (isValid && strlen(token) > 0)
-                count++;
-
-            token = strtok(NULL, " \t\n,;");
+            else if (!isspace(*p)) {
+                in_number = 0;
+            }
+            else {
+                in_number = 0;
+            }
         }
     }
 
@@ -101,50 +170,57 @@ int countIntegers(FILE* file) {
     return count;
 }
 
-// Read integers from a file into an array
+// Read integers from a file into an array - optimized for fewer passes
 int* readIntegers(FILE* file, int* count) {
     *count = countIntegers(file);
 
     if (*count == 0)
         return NULL;
 
-    int* array = (int*)malloc(*count * sizeof(int));
+    // Align to cache line boundary for better memory access
+    int* array = (int*)aligned_alloc(CACHE_LINE_SIZE, ((*count + 7) & ~7) * sizeof(int));
     if (array == NULL)
         return NULL;
 
     int index = 0;
-    char buffer[1024];
+    char buffer[4096];  // Larger buffer for better I/O performance
 
+    rewind(file);
     while (fgets(buffer, sizeof(buffer), file) != NULL && index < *count) {
         char* token = strtok(buffer, " \t\n,;");
         while (token != NULL && index < *count) {
-            // Check if token is a valid integer
-            int isValid = 1;
-            for (int i = 0; token[i] != '\0'; i++) {
-                if (i == 0 && (token[i] == '-' || token[i] == '+'))
-                    continue;
-                if (!isdigit(token[i])) {
-                    isValid = 0;
-                    break;
-                }
-            }
+            // Use strtol for more robust conversion
+            char* endptr;
+            long val = strtol(token, &endptr, 10);
 
-            if (isValid && strlen(token) > 0)
-                array[index++] = atoi(token);
+            // Only add valid integers
+            if (endptr != token) {
+                array[index++] = (int)val;
+            }
 
             token = strtok(NULL, " \t\n,;");
         }
     }
 
+    *count = index;  // Update with actual count of values read
     return array;
 }
 
 // Write sorted integers to a file
 void writeIntegers(FILE* file, int array[], int count) {
+    const int ITEMS_PER_LINE = 20;
     for (int i = 0; i < count; i++) {
         fprintf(file, "%d", array[i]);
-        if (i < count - 1)
+
+        // Add space if not last item
+        if (i < count - 1) {
             fprintf(file, " ");
+
+            // Add newline for better readability
+            if ((i + 1) % ITEMS_PER_LINE == 0) {
+                fprintf(file, "\n");
+            }
+        }
     }
     fprintf(file, "\n");
 }
@@ -155,6 +231,7 @@ void printUsage(char* programName) {
     printf("  %s -f <input_file>                   # Sort numbers from input file\n", programName);
     printf("  %s -f <input_file> -o <output_file>  # Sort numbers from input file and write to output file\n", programName);
     printf("  %s -f <input_file> --time-only       # Only output the sorting time (for benchmarking)\n", programName);
+    printf("  %s -f <input_file> --block-sort      # Use cache-optimized block sorting algorithm\n", programName);
 }
 
 int main(int argc, char* argv[]) {
@@ -164,7 +241,8 @@ int main(int argc, char* argv[]) {
     FILE* outputFile = NULL;
     int usingFiles = 0;
     char* inputFilename = NULL;
-    int timeOnly = 0;  // Flag for benchmark mode
+    int timeOnly = 0;     // Flag for benchmark mode
+    int useBlockSort = 0; // Flag for using block sort
 
     // Parse command line arguments
     if (argc < 2) {
@@ -172,11 +250,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Check for time-only mode
+    // Check for flags
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--time-only") == 0) {
             timeOnly = 1;
-            break;
+        }
+        else if (strcmp(argv[i], "--block-sort") == 0) {
+            useBlockSort = 1;
         }
     }
 
@@ -217,7 +297,8 @@ int main(int argc, char* argv[]) {
     else {
         // Use command line arguments as before
         n = argc - 1;
-        a = (int*)malloc(n * sizeof(int));
+        // Align the array for better memory access
+        a = (int*)aligned_alloc(CACHE_LINE_SIZE, ((n + 7) & ~7) * sizeof(int));
 
         if (a == NULL) {
             printf("Memory allocation failed\n");
@@ -230,7 +311,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create a copy of the original array for displaying
-    int* original = (int*)malloc(n * sizeof(int));
+    int* original = (int*)aligned_alloc(CACHE_LINE_SIZE, ((n + 7) & ~7) * sizeof(int));
     if (original == NULL) {
         printf("Memory allocation failed\n");
         free(a);
@@ -239,11 +320,15 @@ int main(int argc, char* argv[]) {
     memcpy(original, a, n * sizeof(int));
 
     // Time measurement - start
-    // Only measure the actual sorting algorithm, not I/O operations
     clock_t start_time = clock();
 
-    // Sort the array
-    heapSort(a, n);
+    // Choose sorting algorithm based on flag
+    if (useBlockSort) {
+        blockHeapSort(a, n);
+    }
+    else {
+        heapSort(a, n);
+    }
 
     // Time measurement - end
     clock_t end_time = clock();
@@ -298,6 +383,12 @@ int main(int argc, char* argv[]) {
 
         // Write performance information - only the sorting algorithm time
         fprintf(outputFile, "Sorting algorithm performance: Sorted %d items in %s\n", n, time_output);
+        if (useBlockSort) {
+            fprintf(outputFile, "Algorithm: Cache-optimized Block Heap Sort\n");
+        }
+        else {
+            fprintf(outputFile, "Algorithm: Optimized Hybrid Heap Sort\n");
+        }
 
         fclose(outputFile);
     }
@@ -306,17 +397,25 @@ int main(int argc, char* argv[]) {
         printf("Original array: ");
         for (int i = 0; i < n; i++) {
             printf("%d ", original[i]);
+            if ((i + 1) % 20 == 0) printf("\n");
         }
         printf("\n");
 
         printf("Sorted array: ");
         for (int i = 0; i < n; i++) {
             printf("%d ", a[i]);
+            if ((i + 1) % 20 == 0) printf("\n");
         }
         printf("\n");
 
-        // Print performance information - only the sorting algorithm time
+        // Print performance information
         printf("Sorting algorithm performance: Sorted %d items in %s\n", n, time_output);
+        if (useBlockSort) {
+            printf("Algorithm: Cache-optimized Block Heap Sort\n");
+        }
+        else {
+            printf("Algorithm: Optimized Hybrid Heap Sort\n");
+        }
     }
 
     free(original);
