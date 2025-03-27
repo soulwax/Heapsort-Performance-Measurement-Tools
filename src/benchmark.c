@@ -156,7 +156,7 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
         // Start timing the array generation (for information only)
         clock_t gen_start_time = clock();
 
-        sprintf(gen_cmd, "%s/gen_randf -c %d > /dev/null", bin_path, size);
+        sprintf(gen_cmd, "%s/genrand_f -c %d > /dev/null", bin_path, size);
         system(gen_cmd);
 
         // End timing the array generation

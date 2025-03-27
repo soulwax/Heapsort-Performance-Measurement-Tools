@@ -7,7 +7,7 @@ This project implements a heapsort algorithm with comprehensive performance meas
 - [Basic Usage](#basic-usage)
 - [Using the Programs](#using-the-programs)
   - [Heapsort](#for-heapsort)
-  - [Random Number Generator](#for-gen_randf)
+  - [Random Number Generator](#for-genrand_f)
 - [Performance Measurement](#performance-measurement)
   - [Timing Output](#timing-output)
   - [Benchmark Utility](#benchmark-utility)
@@ -28,7 +28,7 @@ This project implements a heapsort algorithm with comprehensive performance meas
 
    ```sh
    make heapsort
-   make gen_randf
+   make genrand_f
    make benchmark
    ```
 
@@ -68,24 +68,24 @@ This project implements a heapsort algorithm with comprehensive performance meas
 
    This outputs only the sorting time, useful for benchmarking.
 
-### For gen_randf
+### For genrand_f
 
 1. **Generate default random numbers** (100 numbers between 1-1000):
 
    ```sh
-   ./bin/gen_randf
+   ./bin/genrand_f
    ```
 
 2. **Generate a specific number of random values**:
 
    ```sh
-   ./bin/gen_randf -c 500
+   ./bin/genrand_f -c 500
    ```
 
 3. **Specify range for random numbers**:
 
    ```sh
-   ./bin/gen_randf -c 200 -min -100 -max 100
+   ./bin/genrand_f -c 200 -min -100 -max 100
    ```
 
 ## Performance Measurement

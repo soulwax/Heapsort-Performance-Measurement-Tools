@@ -25,7 +25,7 @@
         {
             "label": "Build Gen Random File",
             "type": "shell",
-            "command": "make gen_randf",
+            "command": "make genrand_f",
             "group": "build",
             "problemMatcher": [
                 "$gcc"

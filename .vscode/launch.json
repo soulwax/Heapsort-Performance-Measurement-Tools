@@ -34,7 +34,7 @@
             "name": "Debug Gen Random File",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/gen_randf",
+            "program": "${workspaceFolder}/bin/genrand_f",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -47,7 +47,7 @@
             "name": "Debug Gen Random File with Custom Options",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/gen_randf",
+            "program": "${workspaceFolder}/bin/genrand_f",
             "args": [
                 "-c",
                 "200",

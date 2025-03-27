@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -g -Wall -O2 -arch arm64
 BIN_DIR = bin
 SRC_DIR = src
-TARGETS = heapsort gen_randf benchmark
+TARGETS = heapsort genrand_f benchmark
 
 .PHONY: all clean directories
 
@@ -17,7 +17,7 @@ heapsort: $(SRC_DIR)/heapsort_f.c
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
 	@echo "Built $@ in $(BIN_DIR)/"
 
-gen_randf: $(SRC_DIR)/genrand_f.c
+genrand_f: $(SRC_DIR)/genrand_f.c
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
 	@echo "Built $@ in $(BIN_DIR)/"
 
@@ -30,12 +30,12 @@ clean:
 	rm -f .temp_sort_output .latest_file
 
 # Run benchmark with default settings
-run-benchmark: benchmark heapsort gen_randf
+run-benchmark: benchmark heapsort genrand_f
 	@echo "Running benchmark with default settings..."
 	./$(BIN_DIR)/benchmark
 
 # Run benchmark with custom settings (example)
-run-custom-benchmark: benchmark heapsort gen_randf
+run-custom-benchmark: benchmark heapsort genrand_f
 	@echo "Running custom benchmark..."
 	./$(BIN_DIR)/benchmark --min 500 --max 10000 --step 500 --repeats 5
 
@@ -45,7 +45,7 @@ run-custom-benchmark: benchmark heapsort gen_randf
 #
 # Compile specific target:
 #   make heapsort
-#   make gen_randf
+#   make genrand_f
 #   make benchmark
 #
 # Run heapsort with command line arguments:
@@ -57,14 +57,14 @@ run-custom-benchmark: benchmark heapsort gen_randf
 # Run heapsort with input file and output file:
 #   ./bin/heapsort -f input.txt -o sorted.txt
 #
-# Run gen_randf with default settings (100 numbers between 1-1000):
-#   ./bin/gen_randf
+# Run genrand_f with default settings (100 numbers between 1-1000):
+#   ./bin/genrand_f
 #
 # Generate 500 random numbers:
-#   ./bin/gen_randf -c 500
+#   ./bin/genrand_f -c 500
 #
 # Generate 200 random numbers between -100 and 100:
-#   ./bin/gen_randf -c 200 -min -100 -max 100
+#   ./bin/genrand_f -c 200 -min -100 -max 100
 #
 # Run benchmark with default settings:
 #   make run-benchmark
