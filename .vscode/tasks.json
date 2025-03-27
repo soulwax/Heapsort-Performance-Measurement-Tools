@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build All",
+            "type": "shell",
+            "command": "make",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Heapsort",
+            "type": "shell",
+            "command": "make heapsort",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Gen Random File",
+            "type": "shell",
+            "command": "make gen_randf",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make clean",
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

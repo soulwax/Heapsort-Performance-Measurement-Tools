@@ -1,0 +1,67 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Heapsort",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/heapsort",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build Heapsort"
+        },
+        {
+            "name": "Debug Heapsort with File Input",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/heapsort",
+            "args": [
+                "-f",
+                "input/randnum_30b3373f1d18e7f2.txt"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build Heapsort"
+        },
+        {
+            "name": "Debug Gen Random File",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/gen_randf",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build Gen Random File"
+        },
+        {
+            "name": "Debug Gen Random File with Custom Options",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/gen_randf",
+            "args": [
+                "-c",
+                "200",
+                "-min",
+                "-100",
+                "-max",
+                "100"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "Build Gen Random File"
+        }
+    ]
+}

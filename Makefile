@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -g -Wall -O2 -arch arm64
 BIN_DIR = bin
 SRC_DIR = src
-TARGETS = heapsort_f genrand_f
+TARGETS = heapsort gen_randf
 
 .PHONY: all clean directories
 
@@ -13,11 +13,11 @@ all: directories $(TARGETS)
 directories:
 	mkdir -p $(BIN_DIR)
 
-heapsort: $(SRC_DIR)/main.c
+heapsort: $(SRC_DIR)/heapsort_f.c
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
 	@echo "Built $@ in $(BIN_DIR)/"
 
-gen_randf: $(SRC_DIR)/gen_randf.c
+gen_randf: $(SRC_DIR)/genrand_f.c
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $<
 	@echo "Built $@ in $(BIN_DIR)/"
 

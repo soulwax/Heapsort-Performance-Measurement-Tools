@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.c": "c",
+        "*.h": "c"
+    },
+    "editor.formatOnSave": true,
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/**"
+    ],
+    "C_Cpp.default.defines": [],
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+    "C_Cpp.default.cStandard": "c11"
+}
