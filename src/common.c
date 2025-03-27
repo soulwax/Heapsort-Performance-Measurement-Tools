@@ -36,10 +36,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-        }
+    }
 
     return 1;
-    }
+}
 
 // Function to extract filename from path
 const char* get_filename(const char* path) {
