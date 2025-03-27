@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <time.h>
 
 // Function to create a directory if it doesn't exist
 int create_directory(const char* path) {
@@ -21,10 +22,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-    }
+        }
 
     return 1;
-}
+    }
 
 // Function to extract filename from path
 const char* get_filename(const char* path) {
@@ -36,6 +37,26 @@ const char* get_filename(const char* path) {
     }
 
     return path; // No '/' found, return the original path
+}
+
+// Function to format time in appropriate units
+void format_time(double time_seconds, char* buffer, size_t buffer_size) {
+    if (time_seconds < 0.000001) {
+        // Nanoseconds (less than 1 microsecond)
+        sprintf(buffer, "%.2f ns", time_seconds * 1e9);
+    }
+    else if (time_seconds < 0.001) {
+        // Microseconds (less than 1 millisecond)
+        sprintf(buffer, "%.2f μs", time_seconds * 1e6);
+    }
+    else if (time_seconds < 1.0) {
+        // Milliseconds (less than 1 second)
+        sprintf(buffer, "%.2f ms", time_seconds * 1e3);
+    }
+    else {
+        // Seconds
+        sprintf(buffer, "%.2f s", time_seconds);
+    }
 }
 
 void swap(int* a, int* b) {
@@ -236,8 +257,19 @@ int main(int argc, char* argv[]) {
     }
     memcpy(original, a, n * sizeof(int));
 
+    // Time measurement - start
+    clock_t start_time = clock();
+
     // Sort the array
     heapSort(a, n);
+
+    // Time measurement - end
+    clock_t end_time = clock();
+    double time_taken = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+
+    // Format time output
+    char time_output[50];
+    format_time(time_taken, time_output, sizeof(time_output));
 
     // If using input file, create/use output file in output directory
     if (usingFiles && outputFile == NULL) {
@@ -274,6 +306,9 @@ int main(int argc, char* argv[]) {
         fprintf(outputFile, "Sorted array: ");
         writeIntegers(outputFile, a, n);
 
+        // Write performance information
+        fprintf(outputFile, "Performance: Sorted %d items in %s\n", n, time_output);
+
         fclose(outputFile);
     }
     else {
@@ -289,6 +324,9 @@ int main(int argc, char* argv[]) {
             printf("%d ", a[i]);
         }
         printf("\n");
+
+        // Print performance information
+        printf("Performance: Sorted %d items in %s\n", n, time_output);
     }
 
     free(original);

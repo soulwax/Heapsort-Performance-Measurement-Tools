@@ -32,6 +32,42 @@
             ]
         },
         {
+            "label": "Build Benchmark",
+            "type": "shell",
+            "command": "make benchmark",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Run Benchmark (Default)",
+            "type": "shell",
+            "command": "make run-benchmark",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "dependsOn": "Build All",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Custom Benchmark",
+            "type": "shell",
+            "command": "make run-custom-benchmark",
+            "group": "test",
+            "dependsOn": "Build All",
+            "problemMatcher": []
+        },
+        {
+            "label": "Visualize Benchmark Results",
+            "type": "shell",
+            "command": "python3 visualize_benchmark.py",
+            "group": "test",
+            "dependsOn": "Run Benchmark (Default)",
+            "problemMatcher": []
+        },
+        {
             "label": "Clean",
             "type": "shell",
             "command": "make clean",

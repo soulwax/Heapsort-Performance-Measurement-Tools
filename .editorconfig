@@ -1,3 +1,5 @@
+# File: .editorconfig
+
 # EditorConfig with K&R brace style (braces on same line)
 root = true
 
