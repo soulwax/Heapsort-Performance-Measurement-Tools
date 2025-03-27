@@ -267,3 +267,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+# keep fixed files in the input and output directories for demonstration purposes
+input/*
+!input/randnum_fixed.txt
+
+output/*
+!output/randnum_fixed.txt
+
+benchmark_results/
