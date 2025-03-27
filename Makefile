@@ -1,11 +1,7 @@
 # File: Makefile
 
-CC = cc
-# Find this line:
-CFLAGS = -g -Wall -O2 -arch arm64
-
-# Change it to:
-CFLAGS = -g -Wall -O2 -arch arm64 -L/opt/homebrew/lib
+CC = gcc
+CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip
 BIN_DIR = bin
 SRC_DIR = src
 TARGETS = heapsort genrand_f benchmark
