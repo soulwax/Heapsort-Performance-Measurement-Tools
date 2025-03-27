@@ -12,6 +12,7 @@ This project implements a heapsort algorithm with comprehensive performance meas
   - [Timing Output](#timing-output)
   - [Benchmark Utility](#benchmark-utility)
   - [Visualization Tools](#visualization-tools)
+- [Benchmark Results](#benchmark-results)
 - [Makefile Commands](#makefile-commands)
 - [VS Code Integration](#vs-code-integration)
 
@@ -95,7 +96,7 @@ The project includes comprehensive tools for measuring and analyzing the perform
 
 All sort operations automatically include timing information that measures **only the sorting algorithm** (not file I/O or other operations). The time is displayed in appropriate units (ns, μs, ms, or s) based on the magnitude:
 
-```plaintext
+```
 Sorting algorithm performance: Sorted 1000 items in 1.25 ms
 ```
 
@@ -146,6 +147,28 @@ This creates three visualizations in the `benchmark_plots` directory:
 1. **Sort Time Plot**: Shows sorting time vs. array size
 2. **Log-Log Plot**: Log-log scale plot to help identify algorithmic complexity
 3. **Complexity Analysis**: Curve fitting to determine the algorithm's time complexity
+
+## Benchmark Results
+
+Below are sample visualizations of the HeapSort algorithm performance based on benchmark data:
+
+### Sort Time Plot
+
+This plot shows the direct relationship between array size and sorting time in milliseconds.
+
+![Sort Time Plot](benchmark_plots/heapsort_benchmark_1000_100000_sort_time.png)
+
+### Logarithmic Scale Analysis
+
+This log-log plot helps visualize the algorithmic complexity by comparing the actual performance against reference complexity lines (O(n), O(n log n), O(n²)).
+
+![Log-Log Plot](benchmark_plots/heapsort_benchmark_1000_100000_loglog.png)
+
+### Complexity Analysis
+
+This analysis uses curve fitting to determine which complexity class best describes the algorithm's performance. As expected for HeapSort, the O(n log n) curve typically provides the best fit.
+
+![Complexity Analysis](benchmark_plots/heapsort_benchmark_1000_100000_complexity.png)
 
 ## Makefile Commands
 
