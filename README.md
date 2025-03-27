@@ -51,19 +51,19 @@ This project implements a heapsort algorithm with comprehensive performance meas
 2. **Sort numbers from an input file**:
 
    ```sh
-   ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt
+   ./bin/heapsort -f input/randnum_fixed.txt
    ```
 
 3. **Sort and save to output file**:
 
    ```sh
-   ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt -o sorted.txt
+   ./bin/heapsort -f input/randnum_fixed.txt -o sorted.txt
    ```
 
 4. **Time-only mode (for benchmarking)**:
 
    ```sh
-   ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt --time-only
+   ./bin/heapsort -f input/randnum_fixed.txt --time-only
    ```
 
    This outputs only the sorting time, useful for benchmarking.
