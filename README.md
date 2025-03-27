@@ -156,19 +156,19 @@ Below are sample visualizations of the HeapSort algorithm performance based on b
 
 This plot shows the direct relationship between array size and sorting time in milliseconds.
 
-![Sort Time Plot](benchmark_plots/heapsort_benchmark_1000_100000_sort_time.png)
+![Sort Time Plot](benchmark_plots/heapsort_benchmark_500_100000_sort_time.png)
 
 ### Logarithmic Scale Analysis
 
 This log-log plot helps visualize the algorithmic complexity by comparing the actual performance against reference complexity lines (O(n), O(n log n), O(n²)).
 
-![Log-Log Plot](benchmark_plots/heapsort_benchmark_1000_100000_loglog.png)
+![Log-Log Plot](benchmark_plots/heapsort_benchmark_500_100000_loglog.png)
 
 ### Complexity Analysis
 
 This analysis uses curve fitting to determine which complexity class best describes the algorithm's performance. As expected for HeapSort, the O(n log n) curve typically provides the best fit.
 
-![Complexity Analysis](benchmark_plots/heapsort_benchmark_1000_100000_complexity.png)
+![Complexity Analysis](benchmark_plots/heapsort_benchmark_500_100000_complexity.png)
 
 ## Makefile Commands
 
