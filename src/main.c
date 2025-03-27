@@ -2,8 +2,47 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <errno.h>
 
-void swap(int *a, int *b)
+// Function to create a directory if it doesn't exist
+int create_directory(const char* path)
+{
+    struct stat st = { 0 };
+
+    if (stat(path, &st) == -1)
+    {
+#ifdef _WIN32
+        if (mkdir(path) != 0)
+        {
+#else
+        if (mkdir(path, 0755) != 0)
+        {
+#endif
+            perror("Failed to create directory");
+            return 0;
+        }
+        printf("Created directory: %s\n", path);
+    }
+
+    return 1;
+}
+
+// Function to extract filename from path
+const char* get_filename(const char* path)
+{
+    const char* filename = strrchr(path, '/');
+
+    if (filename != NULL)
+    {
+        // Move past the '/'
+        return filename + 1;
+    }
+
+    return path; // No '/' found, return the original path
+}
+
+void swap(int* a, int* b)
 {
     int temp = *a;
     *a = *b;
@@ -48,7 +87,7 @@ void heapSort(int a[], int n)
 }
 
 // Count the number of integers in a file
-int countIntegers(FILE *file)
+int countIntegers(FILE * file)
 {
     int count = 0;
     char buffer[1024];
@@ -58,7 +97,7 @@ int countIntegers(FILE *file)
 
     while (fgets(buffer, sizeof(buffer), file) != NULL)
     {
-        char *token = strtok(buffer, " \t\n,;");
+        char* token = strtok(buffer, " \t\n,;");
         while (token != NULL)
         {
             // Check if token is a valid integer
@@ -86,14 +125,14 @@ int countIntegers(FILE *file)
 }
 
 // Read integers from a file into an array
-int *readIntegers(FILE *file, int *count)
+int* readIntegers(FILE * file, int* count)
 {
     *count = countIntegers(file);
 
     if (*count == 0)
         return NULL;
 
-    int *array = (int *)malloc(*count * sizeof(int));
+    int* array = (int*)malloc(*count * sizeof(int));
     if (array == NULL)
         return NULL;
 
@@ -102,7 +141,7 @@ int *readIntegers(FILE *file, int *count)
 
     while (fgets(buffer, sizeof(buffer), file) != NULL && index < *count)
     {
-        char *token = strtok(buffer, " \t\n,;");
+        char* token = strtok(buffer, " \t\n,;");
         while (token != NULL && index < *count)
         {
             // Check if token is a valid integer
@@ -129,7 +168,7 @@ int *readIntegers(FILE *file, int *count)
 }
 
 // Write sorted integers to a file
-void writeIntegers(FILE *file, int array[], int count)
+void writeIntegers(FILE * file, int array[], int count)
 {
     for (int i = 0; i < count; i++)
     {
@@ -140,7 +179,7 @@ void writeIntegers(FILE *file, int array[], int count)
     fprintf(file, "\n");
 }
 
-void printUsage(char *programName)
+void printUsage(char* programName)
 {
     printf("Usage:\n");
     printf("  %s <num1> <num2> <num3> ...          # Sort numbers from command line\n", programName);
@@ -148,13 +187,14 @@ void printUsage(char *programName)
     printf("  %s -f <input_file> -o <output_file>  # Sort numbers from input file and write to output file\n", programName);
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    int *a = NULL;
+    int* a = NULL;
     int n = 0;
-    FILE *inputFile = NULL;
-    FILE *outputFile = NULL;
+    FILE* inputFile = NULL;
+    FILE* outputFile = NULL;
     int usingFiles = 0;
+    char* inputFilename = NULL;
 
     // Parse command line arguments
     if (argc < 2)
@@ -168,10 +208,11 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[i], "-f") == 0 && i + 1 < argc)
         {
-            inputFile = fopen(argv[i + 1], "r");
+            inputFilename = argv[i + 1];
+            inputFile = fopen(inputFilename, "r");
             if (inputFile == NULL)
             {
-                printf("Error: Could not open input file '%s'\n", argv[i + 1]);
+                printf("Error: Could not open input file '%s'\n", inputFilename);
                 return 1;
             }
             usingFiles = 1;
@@ -207,7 +248,7 @@ int main(int argc, char *argv[])
     {
         // Use command line arguments as before
         n = argc - 1;
-        a = (int *)malloc(n * sizeof(int));
+        a = (int*)malloc(n * sizeof(int));
 
         if (a == NULL)
         {
@@ -221,33 +262,79 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Print original array
-    printf("Original array: ");
-    for (int i = 0; i < n; i++)
+    // Create a copy of the original array for displaying
+    int* original = (int*)malloc(n * sizeof(int));
+    if (original == NULL)
     {
-        printf("%d ", a[i]);
+        printf("Memory allocation failed\n");
+        free(a);
+        return 1;
     }
-    printf("\n");
+    memcpy(original, a, n * sizeof(int));
 
     // Sort the array
     heapSort(a, n);
 
-    // Print sorted array
-    printf("Sorted array: ");
-    for (int i = 0; i < n; i++)
+    // If using input file, create/use output file in output directory
+    if (usingFiles && outputFile == NULL)
     {
-        printf("%d ", a[i]);
-    }
-    printf("\n");
+        // Create output directory if it doesn't exist
+        if (!create_directory("output"))
+        {
+            free(a);
+            free(original);
+            return 1;
+        }
 
-    // Write to output file if specified
+        // Extract the filename from the input path
+        const char* baseFilename = get_filename(inputFilename);
+
+        // Create output filename
+        char outputPath[1024];
+        snprintf(outputPath, sizeof(outputPath), "output/%s", baseFilename);
+
+        outputFile = fopen(outputPath, "w");
+        if (outputFile == NULL)
+        {
+            printf("Error: Could not create output file '%s'\n", outputPath);
+            free(a);
+            free(original);
+            return 1;
+        }
+
+        printf("Writing sorted output to: %s\n", outputPath);
+    }
+
     if (outputFile != NULL)
     {
+        // Write both original and sorted arrays to the output file
+        fprintf(outputFile, "Original array: ");
+        writeIntegers(outputFile, original, n);
+
+        fprintf(outputFile, "Sorted array: ");
         writeIntegers(outputFile, a, n);
+
         fclose(outputFile);
-        printf("Sorted array written to output file\n");
+    }
+    else
+    {
+        // Print to console if no output file specified
+        printf("Original array: ");
+        for (int i = 0; i < n; i++)
+        {
+            printf("%d ", original[i]);
+        }
+        printf("\n");
+
+        printf("Sorted array: ");
+        for (int i = 0; i < n; i++)
+        {
+            printf("%d ", a[i]);
+        }
+        printf("\n");
     }
 
+    free(original);
     free(a);
     return 0;
 }

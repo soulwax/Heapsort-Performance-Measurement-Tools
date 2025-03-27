@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 // Simple hash function (djb2)
-uint64_t hash_string(const char *str)
+uint64_t hash_string(const char* str)
 {
     uint64_t hash = 5381;
     int c;
@@ -22,9 +22,9 @@ uint64_t hash_string(const char *str)
 }
 
 // Create directory if it doesn't exist
-int create_directory(const char *path)
+int create_directory(const char* path)
 {
-    struct stat st = {0};
+    struct stat st = { 0 };
 
     if (stat(path, &st) == -1)
     {
@@ -44,7 +44,7 @@ int create_directory(const char *path)
     return 1;
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     int count = 100; // Default number of random numbers
     int min = 1;     // Default minimum value
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
     srand((unsigned int)time(NULL));
 
     // Generate random numbers
-    int *numbers = (int *)malloc(count * sizeof(int));
+    int* numbers = (int*)malloc(count * sizeof(int));
     if (!numbers)
     {
         perror("Failed to allocate memory");
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
     }
 
     // Generate content for hash calculation
-    char *content_buffer = (char *)malloc(count * 12); // Enough space for numbers
+    char* content_buffer = (char*)malloc(count * 12); // Enough space for numbers
     if (!content_buffer)
     {
         perror("Failed to allocate memory for content buffer");
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
     sprintf(filename, "input/randnum_%lx.txt", hash_value);
 
     // Write to file
-    FILE *file = fopen(filename, "w");
+    FILE* file = fopen(filename, "w");
     if (!file)
     {
         perror("Failed to open file for writing");
