@@ -1,3 +1,5 @@
+# File: .gitignore
+
 # Prerequisites
 *.d
 
@@ -88,3 +90,5 @@ tmp/
 vendor/
 .sass-cache/
 .bundle/
+
+tree.txt

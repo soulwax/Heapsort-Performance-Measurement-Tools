@@ -1,8 +1,10 @@
+# File: Makefile
+
 CC = gcc
 CFLAGS = -g -Wall -O2 -arch arm64
 BIN_DIR = bin
 SRC_DIR = src
-TARGETS = heapsort gen_randf
+TARGETS = heapsort_f genrand_f
 
 .PHONY: all clean directories
 
@@ -22,10 +24,10 @@ gen_randf: $(SRC_DIR)/gen_randf.c
 clean:
 	rm -rf $(BIN_DIR)
 
-# Usage examples: 
+# Usage examples:
 # Compile all:
 #   make
-# 
+#
 # Compile specific target:
 #   make heapsort
 #   make gen_randf
