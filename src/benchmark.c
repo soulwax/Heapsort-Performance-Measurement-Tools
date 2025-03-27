@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // Format time into appropriate units (ns, μs, ms, s)
 void format_time(double time_seconds, char* buffer, size_t buffer_size) {
@@ -45,7 +46,84 @@ int create_directory(const char* path) {
     return 1;
 }
 
-void run_heapsort_benchmark(const char* heapsort_path, int min_size, int max_size, int step, int repeats) {
+// Get the time from running heapsort with time-only flag
+double measure_heapsort_time(const char* heapsort_path, const char* input_file, int repeats) {
+    char command[1024];
+    double total_time = 0.0;
+
+    // Create a temporary file for the time output
+    char temp_output_file[] = ".temp_time_output_XXXXXX";
+    int fd = mkstemp(temp_output_file);
+
+    if (fd == -1) {
+        perror("Failed to create temporary file");
+        return -1.0;
+    }
+    close(fd);
+
+    for (int i = 0; i < repeats; i++) {
+        // Run heapsort with time-only mode and capture the output
+        sprintf(command, "%s/heapsort -f %s --time-only > %s", heapsort_path, input_file, temp_output_file);
+        int status = system(command);
+
+        if (status != 0) {
+            printf("Error running heapsort command\n");
+            unlink(temp_output_file);
+            return -1.0;
+        }
+
+        // Read the time output from the temporary file
+        FILE* time_file = fopen(temp_output_file, "r");
+        if (!time_file) {
+            perror("Failed to open temporary time file");
+            unlink(temp_output_file);
+            return -1.0;
+        }
+
+        char time_str[100];
+        if (fgets(time_str, sizeof(time_str), time_file) == NULL) {
+            printf("Failed to read time output\n");
+            fclose(time_file);
+            unlink(temp_output_file);
+            return -1.0;
+        }
+        fclose(time_file);
+
+        // Parse the time value
+        double time_value;
+        char unit[10];
+        if (strstr(time_str, "ns")) {
+            sscanf(time_str, "%lf ns", &time_value);
+            time_value /= 1e9;  // Convert ns to seconds
+        }
+        else if (strstr(time_str, "μs")) {
+            sscanf(time_str, "%lf μs", &time_value);
+            time_value /= 1e6;  // Convert μs to seconds
+        }
+        else if (strstr(time_str, "ms")) {
+            sscanf(time_str, "%lf ms", &time_value);
+            time_value /= 1e3;  // Convert ms to seconds
+        }
+        else if (strstr(time_str, "s")) {
+            sscanf(time_str, "%lf s", &time_value);
+        }
+        else {
+            printf("Unknown time format: %s\n", time_str);
+            unlink(temp_output_file);
+            return -1.0;
+        }
+
+        total_time += time_value;
+    }
+
+    // Clean up the temporary file
+    unlink(temp_output_file);
+
+    // Return the average time
+    return total_time / repeats;
+}
+
+void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, int step, int repeats) {
     // Create benchmark results directory
     if (!create_directory("benchmark_results")) {
         return;
@@ -61,18 +139,29 @@ void run_heapsort_benchmark(const char* heapsort_path, int min_size, int max_siz
     }
 
     // Write CSV header
-    fprintf(output_file, "Size,Time (s),Time (ms),Formatted Time\n");
+    fprintf(output_file, "Size,Time (s),Time (ms),Formatted Time,Array Generation Time (s)\n");
 
-    printf("Running HeapSort benchmarks from size %d to %d (step %d, %d repeats)...\n",
-        min_size, max_size, step, repeats);
+    printf("Running HeapSort Algorithm Benchmarks\n");
+    printf("=====================================\n");
+    printf("Size range: %d to %d (step %d)\n", min_size, max_size, step);
+    printf("Repetitions per size: %d\n\n", repeats);
 
     for (int size = min_size; size <= max_size; size += step) {
-        printf("Benchmarking size %d... ", size);
+        printf("Benchmarking array size %d... ", size);
+        fflush(stdout);
 
-        // First generate random numbers for this size
+        // First generate random numbers for this size (setup phase)
         char gen_cmd[512];
-        sprintf(gen_cmd, "%s/gen_randf -c %d > /dev/null", heapsort_path, size);
+
+        // Start timing the array generation (for information only)
+        clock_t gen_start_time = clock();
+
+        sprintf(gen_cmd, "%s/gen_randf -c %d > /dev/null", bin_path, size);
         system(gen_cmd);
+
+        // End timing the array generation
+        clock_t gen_end_time = clock();
+        double gen_time = (double)(gen_end_time - gen_start_time) / CLOCKS_PER_SEC;
 
         // Find the latest generated file
         char find_cmd[512];
@@ -96,42 +185,31 @@ void run_heapsort_benchmark(const char* heapsort_path, int min_size, int max_siz
         // Remove newline character
         input_file[strcspn(input_file, "\n")] = 0;
 
-        // Run the benchmark multiple times and take average
-        double total_time = 0.0;
-        char heapsort_cmd[512];
+        // Run the sorting algorithm benchmark
+        double sort_time = measure_heapsort_time(bin_path, input_file, repeats);
 
-        for (int rep = 0; rep < repeats; rep++) {
-            // Create a temporary file for timing output
-            sprintf(heapsort_cmd, "%s/heapsort -f %s -o .temp_sort_output", heapsort_path, input_file);
-
-            clock_t start_time = clock();
-            system(heapsort_cmd);
-            clock_t end_time = clock();
-
-            total_time += (double)(end_time - start_time) / CLOCKS_PER_SEC;
+        if (sort_time < 0) {
+            printf("Error measuring sort time\n");
+            continue;
         }
-
-        // Calculate average time
-        double avg_time = total_time / repeats;
 
         // Format time for display
         char time_str[50];
-        format_time(avg_time, time_str, sizeof(time_str));
+        format_time(sort_time, time_str, sizeof(time_str));
 
         // Write results to CSV
-        fprintf(output_file, "%d,%f,%f,%s\n",
-            size, avg_time, avg_time * 1000, time_str);
+        fprintf(output_file, "%d,%f,%f,%s,%f\n",
+            size, sort_time, sort_time * 1000, time_str, gen_time);
 
-        printf("Average time: %s\n", time_str);
-
-        // Clean up temporary files
-        system("rm -f .temp_sort_output");
+        printf("Sort time: %s\n", time_str);
     }
 
     fclose(output_file);
     system("rm -f .latest_file");
 
-    printf("Benchmark complete. Results saved to %s\n", output_filename);
+    printf("\nBenchmark complete. Results saved to %s\n", output_filename);
+    printf("Note: The benchmark focused solely on the sorting algorithm performance,\n");
+    printf("      excluding file I/O operations.\n");
 }
 
 void print_usage(const char* program_name) {

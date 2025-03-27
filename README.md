@@ -1,6 +1,21 @@
-# Heapsort + Random Number Generator into File
+# Heapsort + Performance Measurement Tools
 
-## Basic Makefile Commands
+This project implements a heapsort algorithm with comprehensive performance measurement tools, as well as a random number generator utility. It includes features for timing sort operations, conducting benchmarks, and visualizing algorithm performance.
+
+## Table of Contents
+
+- [Basic Usage](#basic-usage)
+- [Using the Programs](#using-the-programs)
+  - [Heapsort](#for-heapsort)
+  - [Random Number Generator](#for-gen_randf)
+- [Performance Measurement](#performance-measurement)
+  - [Timing Output](#timing-output)
+  - [Benchmark Utility](#benchmark-utility)
+  - [Visualization Tools](#visualization-tools)
+- [Makefile Commands](#makefile-commands)
+- [VS Code Integration](#vs-code-integration)
+
+## Basic Usage
 
 1. **Build all programs**:
 
@@ -8,29 +23,19 @@
    make
    ```
 
-   This will compile both the `heapsort` program (from main.c) and the `gen_randf` program (from gen_randf.c) and place the executables in the `bin` directory.
-
 2. **Build specific programs**:
 
    ```sh
    make heapsort
-   ```
-
-   or
-
-   ```sh
    make gen_randf
+   make benchmark
    ```
-
-   These commands build only the specified program.
 
 3. **Clean the build**:
 
    ```sh
    make clean
    ```
-
-   This removes the `bin` directory and all compiled executables.
 
 ## Using the Programs
 
@@ -42,15 +47,11 @@
    ./bin/heapsort 5 2 9 1 7 4
    ```
 
-   This sorts the numbers 5, 2, 9, 1, 7, 4 directly.
-
 2. **Sort numbers from an input file**:
 
    ```sh
    ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt
    ```
-
-   This reads integers from the specified file and sorts them. Make sure to provide the exact path to the file.
 
 3. **Sort and save to output file**:
 
@@ -58,7 +59,13 @@
    ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt -o sorted.txt
    ```
 
-   This reads from the input file, sorts the numbers, and writes the result to `sorted.txt`.
+4. **Time-only mode (for benchmarking)**:
+
+   ```sh
+   ./bin/heapsort -f input/randnum_ea6c2b8b5c51682f.txt --time-only
+   ```
+
+   This outputs only the sorting time, useful for benchmarking.
 
 ### For gen_randf
 
@@ -74,35 +81,103 @@
    ./bin/gen_randf -c 500
    ```
 
-   This generates 500 random numbers.
-
 3. **Specify range for random numbers**:
 
    ```sh
    ./bin/gen_randf -c 200 -min -100 -max 100
    ```
 
-   This generates 200 random numbers between -100 and 100.
+## Performance Measurement
 
-## Makefile Configuration
+The project includes comprehensive tools for measuring and analyzing the performance of the heapsort algorithm.
 
-The Makefile includes some important configurations:
+### Timing Output
 
-- `CC = gcc`: Compiler to use
-- `CFLAGS = -g -Wall -O2 -arch arm64`: Compiler flags
-  - `-g`: Include debugging symbols
-  - `-Wall`: Show all warnings
-  - `-O2`: Optimization level 2
-  - `-arch arm64`: Compile for ARM64 architecture (for M1/M2 Macs)
+All sort operations automatically include timing information that measures **only the sorting algorithm** (not file I/O or other operations). The time is displayed in appropriate units (ns, μs, ms, or s) based on the magnitude:
 
-If you're not on an ARM-based Mac, you might want to remove the `-arch arm64` flag or change it to match your architecture.
+```plaintext
+Sorting algorithm performance: Sorted 1000 items in 1.25 ms
+```
 
-## Debugging Your Issue
+### Benchmark Utility
 
-Based on your original problem with the file `input/randnum_ea6c2b8b5c51682f.txt`, make sure:
+The benchmark utility tests heapsort performance across a range of array sizes:
 
-1. The file path is correct relative to where you're running the command
-2. The `input` directory exists in your current working directory
-3. The file contains properly formatted integers
+1. **Run benchmark with default settings**:
 
-If the issue persists, you might want to modify the `main.c` file to add more debugging output, particularly in the `readIntegers` and `countIntegers` functions.
+   ```sh
+   make run-benchmark
+   ```
+
+   This tests array sizes from 1,000 to 100,000 elements in steps of 10,000.
+
+2. **Run custom benchmark**:
+
+   ```sh
+   make run-custom-benchmark
+   ```
+
+   This runs a custom benchmark with different size ranges and steps.
+
+3. **Specify custom benchmark parameters**:
+
+   ```sh
+   ./bin/benchmark --min 500 --max 10000 --step 500 --repeats 5
+   ```
+
+   Parameters:
+   - `--min`: Minimum array size
+   - `--max`: Maximum array size
+   - `--step`: Size increment between benchmarks
+   - `--repeats`: Number of repetitions for each size (for more accurate measurements)
+
+Benchmark results are saved to CSV files in the `benchmark_results` directory.
+
+### Visualization Tools
+
+A Python script is included to visualize benchmark results:
+
+```sh
+python3 visualize_benchmark.py
+```
+
+This creates three visualizations in the `benchmark_plots` directory:
+
+1. **Sort Time Plot**: Shows sorting time vs. array size
+2. **Log-Log Plot**: Log-log scale plot to help identify algorithmic complexity
+3. **Complexity Analysis**: Curve fitting to determine the algorithm's time complexity
+
+## Makefile Commands
+
+In addition to the basic commands, the Makefile includes:
+
+```sh
+# Build the benchmark utility
+make benchmark
+
+# Run benchmark with default settings
+make run-benchmark
+
+# Run benchmark with custom settings
+make run-custom-benchmark
+
+# Clean all generated files
+make clean
+```
+
+## VS Code Integration
+
+The project includes VS Code configuration files in the `.vscode` directory:
+
+- **tasks.json**: Defines build and benchmark tasks
+- **launch.json**: Configures debugging for all programs
+- **c_cpp_properties.json**: Sets up IntelliSense for C/C++
+- **settings.json**: Additional editor settings
+
+To use the VS Code integration:
+
+1. Open the project folder in VS Code
+2. Press `Ctrl+Shift+B` (or `Cmd+Shift+B` on Mac) to build
+3. Press `F5` to run with debugging
+4. Use the Run and Debug panel to select different launch configurations
+5. Use the Terminal menu to execute tasks like benchmarking

@@ -22,10 +22,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-        }
+    }
 
     return 1;
-    }
+}
 
 // Function to extract filename from path
 const char* get_filename(const char* path) {
@@ -183,6 +183,7 @@ void printUsage(char* programName) {
     printf("  %s <num1> <num2> <num3> ...          # Sort numbers from command line\n", programName);
     printf("  %s -f <input_file>                   # Sort numbers from input file\n", programName);
     printf("  %s -f <input_file> -o <output_file>  # Sort numbers from input file and write to output file\n", programName);
+    printf("  %s -f <input_file> --time-only       # Only output the sorting time (for benchmarking)\n", programName);
 }
 
 int main(int argc, char* argv[]) {
@@ -192,11 +193,20 @@ int main(int argc, char* argv[]) {
     FILE* outputFile = NULL;
     int usingFiles = 0;
     char* inputFilename = NULL;
+    int timeOnly = 0;  // Flag for benchmark mode
 
     // Parse command line arguments
     if (argc < 2) {
         printUsage(argv[0]);
         return 1;
+    }
+
+    // Check for time-only mode
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--time-only") == 0) {
+            timeOnly = 1;
+            break;
+        }
     }
 
     // Check if using file input
@@ -258,6 +268,7 @@ int main(int argc, char* argv[]) {
     memcpy(original, a, n * sizeof(int));
 
     // Time measurement - start
+    // Only measure the actual sorting algorithm, not I/O operations
     clock_t start_time = clock();
 
     // Sort the array
@@ -270,6 +281,14 @@ int main(int argc, char* argv[]) {
     // Format time output
     char time_output[50];
     format_time(time_taken, time_output, sizeof(time_output));
+
+    // In time-only mode, just print the time and exit
+    if (timeOnly) {
+        printf("%s\n", time_output);
+        free(original);
+        free(a);
+        return 0;
+    }
 
     // If using input file, create/use output file in output directory
     if (usingFiles && outputFile == NULL) {
@@ -306,8 +325,8 @@ int main(int argc, char* argv[]) {
         fprintf(outputFile, "Sorted array: ");
         writeIntegers(outputFile, a, n);
 
-        // Write performance information
-        fprintf(outputFile, "Performance: Sorted %d items in %s\n", n, time_output);
+        // Write performance information - only the sorting algorithm time
+        fprintf(outputFile, "Sorting algorithm performance: Sorted %d items in %s\n", n, time_output);
 
         fclose(outputFile);
     }
@@ -325,8 +344,8 @@ int main(int argc, char* argv[]) {
         }
         printf("\n");
 
-        // Print performance information
-        printf("Performance: Sorted %d items in %s\n", n, time_output);
+        // Print performance information - only the sorting algorithm time
+        printf("Sorting algorithm performance: Sorted %d items in %s\n", n, time_output);
     }
 
     free(original);

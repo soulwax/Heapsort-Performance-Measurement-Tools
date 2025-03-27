@@ -21,7 +21,7 @@
             "program": "${workspaceFolder}/bin/heapsort",
             "args": [
                 "-f",
-                "input/randnum_ea6c2b8b5c51682f.txt"
+                "input/randnum_fixed.txt"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
