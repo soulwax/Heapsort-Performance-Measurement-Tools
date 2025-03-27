@@ -109,9 +109,8 @@ int main(int argc, char* argv[]) {
     char time_output[50];
     format_time(time_taken, time_output, sizeof(time_output));
 
-    // Write timing information to the file
-    fprintf(file, "\n\nGeneration Performance: Generated %d numbers in %s", count, time_output);
-    fprintf(file, "\nRange: %d to %d", min, max);
+    // Print timing information to the console but not to the file
+    printf("Performance: Generated %d numbers in %s\n", count, time_output);
 
     fclose(file);
     printf("Generated %d random numbers between %d and %d\n", count, min, max);
