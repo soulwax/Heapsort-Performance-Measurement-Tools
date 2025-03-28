@@ -36,10 +36,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-        }
+    }
 
     return 1;
-    }
+}
 
 // Function to extract filename from path
 const char* get_filename(const char* path) {
@@ -83,7 +83,6 @@ int countIntegers(FILE * file) {
     return count;
 }
 
-// Read integers from a file into an array
 int* readIntegers(FILE * file, int* count) {
     // First, count the integers in the file
     *count = countIntegers(file);
@@ -96,13 +95,39 @@ int* readIntegers(FILE * file, int* count) {
     // Log the count for debugging
     fprintf(stderr, "Found %d integers in the file\n", *count);
 
-    // Allocate memory for the integers with proper alignment
-    size_t alloc_size = (((*count + 7) & ~7) * sizeof(int));
-    int* array = (int*)aligned_alloc(CACHE_LINE_SIZE, alloc_size);
+    // Calculate memory needed with different methods
+    size_t basic_size = (*count) * sizeof(int);
+    size_t aligned_size = (((*count + 7) & ~7) * sizeof(int));
+
+    fprintf(stderr, "Attempting to allocate: %zu bytes (basic) or %zu bytes (aligned)\n",
+        basic_size, aligned_size);
+
+    // Try standard malloc first
+    fprintf(stderr, "Trying standard malloc...\n");
+    int* array = (int*)malloc(basic_size);
 
     if (array == NULL) {
-        fprintf(stderr, "Memory allocation failed for %zu bytes\n", alloc_size);
-        return NULL;
+        fprintf(stderr, "Standard malloc failed for %zu bytes\n", basic_size);
+
+        // Try aligned_alloc with a smaller alignment (e.g., 16 bytes instead of 64)
+        fprintf(stderr, "Trying aligned_alloc with 16-byte alignment...\n");
+        array = (int*)aligned_alloc(16, (((*count + 3) & ~3) * sizeof(int)));
+
+        if (array == NULL) {
+            fprintf(stderr, "All memory allocation attempts failed\n");
+
+            // Get and print system memory info if possible
+            fprintf(stderr, "Current memory state:\n");
+            system("free -m");
+
+            return NULL;
+        }
+        else {
+            fprintf(stderr, "aligned_alloc with 16-byte alignment succeeded\n");
+        }
+    }
+    else {
+        fprintf(stderr, "Standard malloc succeeded\n");
     }
 
     // Reset file position to beginning

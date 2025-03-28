@@ -73,21 +73,20 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
         return -1.0;
     }
 
-    // Read first few bytes to validate file format
-    char buffer[256];
-    size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, check_file);
-    buffer[bytes_read] = '\0';
+    // Count how many integers are in the file
+    int count = 0;
+    int num;
+    while (fscanf(check_file, "%d", &num) == 1) {
+        count++;
+    }
     fclose(check_file);
 
-    // Check if file has reasonable content (should have numbers and spaces)
-    int has_digits = 0;
-    for (int i = 0; i < bytes_read && !has_digits; i++) {
-        if (isdigit(buffer[i])) has_digits = 1;
+    if (count == 0) {
+        fprintf(stderr, "Error: Input file contains no valid integers: %s\n", input_file);
+        return -1.0;
     }
 
-    if (!has_digits) {
-        fprintf(stderr, "Warning: Input file appears to contain no digits: %s\n", input_file);
-    }
+    printf("Verified input file contains %d integers\n", count);
 
     // Attempt measurement with existing file
     double total_time = 0.0;
@@ -207,15 +206,6 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         return;
     }
 
-    // Check if genrand_f exists
-    char genrand_path[300];
-    sprintf(genrand_path, "%s/genrand_f", bin_path);
-    if (!file_exists(genrand_path)) {
-        fprintf(stderr, "Error: Random number generator binary not found at %s\n", genrand_path);
-        fclose(output_file);
-        return;
-    }
-
     for (int size = min_size; size <= max_size; size += step) {
         printf("Benchmarking array size %d... ", size);
         fflush(stdout);
@@ -229,21 +219,7 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
             continue;
         }
 
-        // Create input directory if it doesn't exist
-        if (!create_directory("input")) {
-            fclose(output_file);
-            return;
-        }
-
-        // First generate random numbers for this size with more predictable settings
-        char gen_cmd[512];
-        sprintf(gen_cmd, "%s -c %d -min 1 -max 100 > /dev/null", genrand_path, size);
-        if (system(gen_cmd) != 0) {
-            printf("Error generating random numbers\n");
-            continue;
-        }
-
-        // Find the latest generated file using our function
+        // Use the pre-generated test file directly
         char input_file[256];
         sprintf(input_file, "benchmark_input/test_%d.txt", size);
 
@@ -253,30 +229,28 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
             continue;
         }
 
-        // Skip the step of generating new random numbers for each size
-        double gen_time = 0.0; // No generation time
+        printf("Using input file: %s\n", input_file);
 
-        // Start timing the array generation (for information only)
-        clock_t gen_start_time = clock();
-
-        // Generate random numbers with more predictable settings
-        sprintf(gen_cmd, "%s -c %d -min 1 -max 100 > /dev/null", genrand_path, size);        if (system(gen_cmd) != 0) {
-            printf("Error generating random numbers\n");
+        // Verify the file contains the correct number of integers
+        FILE* verify_file = fopen(input_file, "r");
+        if (!verify_file) {
+            printf("Error: Could not open input file %s\n", input_file);
             continue;
         }
 
-        // End timing the array generation
-        clock_t gen_end_time = clock();
-        double gen_time = (double)(gen_end_time - gen_start_time) / CLOCKS_PER_SEC;
+        // Count integers in the file
+        int expected_count = size;
+        int actual_count = 0;
+        int temp_num;
+        while (fscanf(verify_file, "%d", &temp_num) == 1) {
+            actual_count++;
+        }
+        fclose(verify_file);
 
-        find_latest_file("input", "randnum_", input_file, sizeof(input_file));
-
-        if (input_file[0] == '\0') {
-            printf("Failed to find latest generated file\n");
+        if (actual_count < expected_count) {
+            printf("Error: File contains only %d numbers, expected %d\n", actual_count, expected_count);
             continue;
         }
-
-        printf("Input file: %s\n", input_file);
 
         // Check the file size
         struct stat file_stat;
@@ -301,8 +275,6 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
 
         // Test if the binaries work before benchmarking
         char test_cmd[512];
-        sprintf(test_cmd, "./bin/heapsort -f %s --bench-time > /dev/null 2>&1", input_file);
-        int result = system(test_cmd);
         if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
             sprintf(test_cmd, "%s -f \"%s\" --bench-time > /dev/null 2>&1", heap_sort_path, input_file);
             printf("HeapSort test: %s\n", system(test_cmd) == 0 ? "OK" : "FAILED");
@@ -317,6 +289,7 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         double quick_sort_time = -1.0;
         char heap_time_str[50] = "N/A";
         char quick_time_str[50] = "N/A";
+        double gen_time = 0.0; // No generation time since we're using pre-generated files
 
         if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
             heap_sort_time = measure_sort_time(heap_sort_path, input_file, repeats);
