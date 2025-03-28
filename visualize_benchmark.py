@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # File: visualize_benchmark.py
 
-import argparse
 import glob
 import os
 import sys
@@ -9,281 +8,230 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.ticker import LogFormatter, ScalarFormatter
+from scipy.optimize import curve_fit
 
 
-def find_latest_benchmark_file():
-    """Find the most recent benchmark result file."""
-    files = glob.glob("benchmark_results/*.csv")
-    if not files:
-        print("No benchmark result files found in 'benchmark_results/' directory.")
+def find_latest_benchmark():
+    """Find the most recently created benchmark CSV file."""
+    benchmark_files = glob.glob("benchmark_results/*.csv")
+    if not benchmark_files:
+        print("No benchmark results found. Run 'make run-benchmark' first.")
         sys.exit(1)
 
-    latest_file = max(files, key=os.path.getmtime)
-    print(f"Using latest benchmark file: {latest_file}")
+    # Get the most recently modified file
+    latest_file = max(benchmark_files, key=os.path.getmtime)
     return latest_file
 
 
-def plot_heapsort_benchmark(csv_file, output_dir="benchmark_plots"):
-    """Plot the results from a heapsort benchmark CSV file."""
-    if not os.path.exists(csv_file):
-        print(f"File not found: {csv_file}")
-        return False
+def visualize_benchmark(benchmark_file):
+    """Create visualization of benchmark results."""
+    # Read benchmark data
+    try:
+        df = pd.read_csv(benchmark_file)
+    except Exception as e:
+        print(f"Error reading benchmark file: {e}")
+        sys.exit(1)
 
     # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs("benchmark_plots", exist_ok=True)
 
-    # Load the data
-    df = pd.read_csv(csv_file)
+    # Extract base filename
+    base_filename = os.path.basename(benchmark_file).replace(".csv", "")
 
-    # Clean data - remove invalid measurements (negative values)
-    df = df[df["Time (s)"] > 0]
+    # Create plots
+    create_sort_time_plot(df, base_filename)
+    create_loglog_plot(df, base_filename)
+    create_complexity_analysis(df, base_filename)
 
-    if len(df) == 0:
-        print("No valid data points found in the CSV file after filtering")
-        return False
+    return [
+        f"benchmark_plots/{base_filename}_sort_time.png",
+        f"benchmark_plots/{base_filename}_loglog.png",
+        f"benchmark_plots/{base_filename}_complexity.png",
+    ]
 
-    # Extract base filename for plot titles and output filenames
-    base_filename = os.path.basename(csv_file).replace(".csv", "")
 
-    # Figure 1: Sort time vs. array size
-    plt.figure(figsize=(10, 6))
-    plt.plot(df["Size"], df["Time (ms)"], marker="o", linestyle="-", color="blue")
-    plt.title("Sorting Time vs. Array Size")
-    plt.xlabel("Array Size (n)")
-    plt.ylabel("Time (milliseconds)")
-    plt.grid(True, alpha=0.3)
+def create_sort_time_plot(df, base_filename):
+    """Create a linear plot of sort time vs array size."""
+    plt.figure(figsize=(12, 6))
+
+    # Plot time in milliseconds
+    plt.plot(df["Size"], df["Time (ms)"], "b-o", linewidth=2, markersize=8)
+
+    # Formatting the plot
+    plt.title("HeapSort Algorithm Performance", fontsize=16)
+    plt.xlabel("Array Size (n)", fontsize=12)
+    plt.ylabel("Sorting Time (milliseconds)", fontsize=12)
+    plt.grid(True, linestyle="--", alpha=0.7)
+
+    # Add point annotations
+    step = max(1, len(df) // 10)  # Only label about 10 points to avoid crowding
+    for i, (size, time) in enumerate(zip(df["Size"], df["Time (ms)"])):
+        if i % step == 0:
+            plt.annotate(
+                f"{time:.2f} ms",
+                xy=(size, time),
+                xytext=(0, 10),
+                textcoords="offset points",
+                ha="center",
+                fontsize=8,
+            )
+
+    # Save the plot
+    plot_filename = f"benchmark_plots/{base_filename}_sort_time.png"
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/{base_filename}_sort_time.png")
+    plt.savefig(plot_filename, dpi=300)
+    plt.close()
 
-    # Figure 2: Log-Log plot to analyze complexity
-    plt.figure(figsize=(10, 6))
-    plt.loglog(df["Size"], df["Time (s)"], marker="o", linestyle="-", color="red")
 
-    # Add reference lines for O(n log n)
-    x_range = np.logspace(np.log10(df["Size"].min()), np.log10(df["Size"].max()), 100)
-    c = df["Time (s)"].iloc[0] / (df["Size"].iloc[0] * np.log(df["Size"].iloc[0]))
-    y_range_nlogn = c * x_range * np.log(x_range)
+def create_loglog_plot(df, base_filename):
+    """Create a log-log plot to help visualize algorithmic complexity."""
+    plt.figure(figsize=(12, 6))
 
-    plt.loglog(x_range, y_range_nlogn, "k--", alpha=0.7, label="O(n log n)")
+    # Plot data on log-log scale
+    plt.loglog(df["Size"], df["Time (ms)"], "g-o", linewidth=2, markersize=8)
 
-    plt.title("Sorting Time Complexity (Log-Log Scale)")
-    plt.xlabel("Array Size (n)")
-    plt.ylabel("Time (seconds)")
-    plt.legend()
-    plt.grid(True, alpha=0.3, which="both")
+    # Reference slopes
+    sizes = np.array([min(df["Size"]), max(df["Size"])])
+
+    # O(n) reference
+    ref_factor = df["Time (ms)"].iloc[0] / df["Size"].iloc[0]
+    plt.loglog(sizes, sizes * ref_factor, "k--", label="O(n) reference")
+
+    # O(n log n) reference
+    nlogn_ref = (
+        sizes
+        * np.log2(sizes)
+        * df["Time (ms)"].iloc[0]
+        / (df["Size"].iloc[0] * np.log2(df["Size"].iloc[0]))
+    )
+    plt.loglog(sizes, nlogn_ref, "r--", label="O(n log n) reference")
+
+    # O(n²) reference
+    n2_ref = sizes**2 * df["Time (ms)"].iloc[0] / df["Size"].iloc[0] ** 2
+    plt.loglog(sizes, n2_ref, "b--", label="O(n²) reference")
+
+    plt.title("HeapSort Performance (Log-Log Scale)", fontsize=16)
+    plt.xlabel("Array Size (n)", fontsize=12)
+    plt.ylabel("Sorting Time (milliseconds)", fontsize=12)
+    plt.grid(True, which="both", linestyle="--", alpha=0.5)
+    plt.legend(fontsize=10)
+
+    # Save the log-log plot
+    log_plot_filename = f"benchmark_plots/{base_filename}_loglog.png"
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/{base_filename}_loglog.png")
-
-    # Figure 3: Time/n*log(n) which should be constant for O(n log n) algorithms
-    plt.figure(figsize=(10, 6))
-    df["nlogn"] = df["Size"] * np.log(df["Size"])
-    df["time_per_nlogn"] = df["Time (s)"] / df["nlogn"]
-
-    plt.plot(df["Size"], df["time_per_nlogn"], marker="o", linestyle="-", color="green")
-    plt.title("Time / (n log n) vs Array Size")
-    plt.xlabel("Array Size (n)")
-    plt.ylabel("Time / (n log n)")
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/{base_filename}_complexity.png")
-
-    print(f"Plots saved to {output_dir}/")
-    return True
+    plt.savefig(log_plot_filename, dpi=300)
+    plt.close()
 
 
-def plot_algorithm_comparison(csv_file, output_dir="benchmark_plots"):
-    """Plot the comparison results between heapsort and quicksort."""
-    if not os.path.exists(csv_file):
-        print(f"File not found: {csv_file}")
-        return False
+def create_complexity_analysis(df, base_filename):
+    """Create a plot with curve fitting to determine algorithmic complexity."""
+    plt.figure(figsize=(12, 6))
 
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    x = df["Size"].values
+    y = df["Time (ms)"].values
 
-    # Load the data
-    df = pd.read_csv(csv_file)
+    # Define curve fitting functions for different complexities
+    def linear(x, a, b):
+        return a * x + b
 
-    # Check if this is a comparison file
-    if not all(
-        col in df.columns for col in ["HeapSort Time (ms)", "QuickSort Time (ms)"]
-    ):
-        print(f"File {csv_file} does not appear to be an algorithm comparison file.")
-        return False
+    def nlogn(x, a, b):
+        return a * x * np.log(x) + b
 
-    # Clean data - replace negative values (errors) with NaN for filtering
-    df["HeapSort Time (s)"] = pd.to_numeric(df["HeapSort Time (s)"], errors="coerce")
-    df["QuickSort Time (s)"] = pd.to_numeric(df["QuickSort Time (s)"], errors="coerce")
+    def quadratic(x, a, b):
+        return a * x**2 + b
 
-    # Keep only rows where at least one algorithm has valid data
-    df_filtered = df[
-        (df["HeapSort Time (s)"] > 0) | (df["QuickSort Time (s)"] > 0)
-    ].copy()
+    # Perform curve fitting
+    try:
+        popt_linear, _ = curve_fit(linear, x, y)
+        y_linear = linear(x, *popt_linear)
+        r2_linear = 1 - np.sum((y - y_linear) ** 2) / np.sum((y - np.mean(y)) ** 2)
 
-    if len(df_filtered) == 0:
-        print("No valid data points found in the CSV file after filtering")
-        return False
+        popt_nlogn, _ = curve_fit(nlogn, x, y)
+        y_nlogn = nlogn(x, *popt_nlogn)
+        r2_nlogn = 1 - np.sum((y - y_nlogn) ** 2) / np.sum((y - np.mean(y)) ** 2)
 
-    # Extract base filename for plot titles and output filenames
-    base_filename = os.path.basename(csv_file).replace(".csv", "")
+        popt_quadratic, _ = curve_fit(quadratic, x, y)
+        y_quadratic = quadratic(x, *popt_quadratic)
+        r2_quadratic = 1 - np.sum((y - y_quadratic) ** 2) / np.sum(
+            (y - np.mean(y)) ** 2
+        )
 
-    # Figure 1: Direct comparison of algorithms
-    plt.figure(figsize=(12, 7))
-
-    # Plot each algorithm only where it has valid data
-    heapsort_valid = df_filtered[df_filtered["HeapSort Time (s)"] > 0]
-    quicksort_valid = df_filtered[df_filtered["QuickSort Time (s)"] > 0]
-
-    if not heapsort_valid.empty:
+        # Plot the data and fitted curves
+        plt.scatter(x, y, color="blue", label="Measurement data")
+        plt.plot(x, y_linear, "g--", label=f"O(n) fit, R²={r2_linear:.4f}")
         plt.plot(
-            heapsort_valid["Size"],
-            heapsort_valid["HeapSort Time (ms)"],
-            marker="o",
-            linestyle="-",
-            color="blue",
-            label="HeapSort",
+            x, y_nlogn, "r-", linewidth=2, label=f"O(n log n) fit, R²={r2_nlogn:.4f}"
+        )
+        plt.plot(x, y_quadratic, "b--", label=f"O(n²) fit, R²={r2_quadratic:.4f}")
+
+        # Determine best fit
+        complexities = {
+            "O(n)": r2_linear,
+            "O(n log n)": r2_nlogn,
+            "O(n²)": r2_quadratic,
+        }
+
+        best_fit = max(complexities.items(), key=lambda x: x[1])
+
+        plt.title(
+            f"HeapSort Algorithm Complexity Analysis\nBest fit: {best_fit[0]} (R²={best_fit[1]:.4f})",
+            fontsize=16,
         )
 
-    if not quicksort_valid.empty:
-        plt.plot(
-            quicksort_valid["Size"],
-            quicksort_valid["QuickSort Time (ms)"],
-            marker="s",
-            linestyle="-",
-            color="red",
-            label="QuickSort",
+    except Exception as e:
+        plt.scatter(x, y, color="blue", label="Measurement data")
+        plt.title(
+            "HeapSort Algorithm Complexity Analysis\nCould not perform curve fitting",
+            fontsize=16,
         )
+        print(f"Error during curve fitting: {e}")
 
-    plt.title("Algorithm Comparison: HeapSort vs QuickSort")
-    plt.xlabel("Array Size (n)")
-    plt.ylabel("Time (milliseconds)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    plt.xlabel("Array Size (n)", fontsize=12)
+    plt.ylabel("Sorting Time (milliseconds)", fontsize=12)
+    plt.grid(True, linestyle="--", alpha=0.7)
+    plt.legend(fontsize=10)
+
+    # Save the complexity analysis plot
+    complexity_filename = f"benchmark_plots/{base_filename}_complexity.png"
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/{base_filename}_comparison.png")
-
-    # Figure 2: Log-Log plot
-    plt.figure(figsize=(12, 7))
-
-    if not heapsort_valid.empty:
-        plt.loglog(
-            heapsort_valid["Size"],
-            heapsort_valid["HeapSort Time (s)"],
-            marker="o",
-            linestyle="-",
-            color="blue",
-            label="HeapSort",
-        )
-
-    if not quicksort_valid.empty:
-        plt.loglog(
-            quicksort_valid["Size"],
-            quicksort_valid["QuickSort Time (s)"],
-            marker="s",
-            linestyle="-",
-            color="red",
-            label="QuickSort",
-        )
-
-    # Add reference line for O(n log n)
-    if not df_filtered.empty:
-        x_range = np.logspace(
-            np.log10(df_filtered["Size"].min()),
-            np.log10(df_filtered["Size"].max()),
-            100,
-        )
-
-        # Use the algorithm with the smallest initial time value for reference line
-        ref_time = None
-        ref_size = None
-
-        if not heapsort_valid.empty:
-            ref_time = heapsort_valid["HeapSort Time (s)"].iloc[0]
-            ref_size = heapsort_valid["Size"].iloc[0]
-
-        if not quicksort_valid.empty:
-            if (
-                ref_time is None
-                or quicksort_valid["QuickSort Time (s)"].iloc[0] < ref_time
-            ):
-                ref_time = quicksort_valid["QuickSort Time (s)"].iloc[0]
-                ref_size = quicksort_valid["Size"].iloc[0]
-
-        if ref_time is not None and ref_size is not None:
-            c = ref_time / (ref_size * np.log(ref_size))
-            y_range_nlogn = c * x_range * np.log(x_range)
-            plt.loglog(x_range, y_range_nlogn, "k--", alpha=0.7, label="O(n log n)")
-
-    plt.title("Algorithm Complexity (Log-Log Scale)")
-    plt.xlabel("Array Size (n)")
-    plt.ylabel("Time (seconds)")
-    plt.legend()
-    plt.grid(True, alpha=0.3, which="both")
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/{base_filename}_loglog_comparison.png")
-
-    # Figure 3: Relative performance ratio (for data points where both algorithms worked)
-    both_valid = df_filtered[
-        (df_filtered["HeapSort Time (s)"] > 0) & (df_filtered["QuickSort Time (s)"] > 0)
-    ].copy()
-
-    if not both_valid.empty:
-        plt.figure(figsize=(12, 7))
-        both_valid["Performance Ratio"] = (
-            both_valid["HeapSort Time (ms)"] / both_valid["QuickSort Time (ms)"]
-        )
-        plt.plot(
-            both_valid["Size"],
-            both_valid["Performance Ratio"],
-            marker="o",
-            linestyle="-",
-            color="purple",
-        )
-        plt.axhline(y=1.0, color="k", linestyle="--", alpha=0.7)
-        plt.title("Performance Ratio: HeapSort Time / QuickSort Time")
-        plt.xlabel("Array Size (n)")
-        plt.ylabel("Ratio")
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(f"{output_dir}/{base_filename}_performance_ratio.png")
-    else:
-        print("Not enough valid data points to create performance ratio plot")
-
-    print(f"Comparison plots saved to {output_dir}/")
-    return True
+    plt.savefig(complexity_filename, dpi=300)
+    plt.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualize sorting algorithm benchmark results."
-    )
-    parser.add_argument(
-        "csv_file", nargs="?", help="CSV file containing benchmark results"
-    )
-    parser.add_argument(
-        "--compare",
-        action="store_true",
-        help="Compare algorithms (use with algorithm comparison CSV)",
-    )
-    parser.add_argument(
-        "--output-dir", default="benchmark_plots", help="Directory to save output plots"
-    )
-
-    args = parser.parse_args()
-
-    # If no CSV file specified, find the latest benchmark file
-    csv_file = args.csv_file if args.csv_file else find_latest_benchmark_file()
-
-    if args.compare:
-        success = plot_algorithm_comparison(csv_file, args.output_dir)
+    # Find the latest benchmark file or use provided file
+    if len(sys.argv) > 1:
+        benchmark_file = sys.argv[1]
+        if not os.path.exists(benchmark_file):
+            print(f"Benchmark file not found: {benchmark_file}")
+            sys.exit(1)
     else:
-        success = plot_heapsort_benchmark(csv_file, args.output_dir)
+        benchmark_file = find_latest_benchmark()
 
-    if success:
-        print(f"Visualization complete. Plots saved to {args.output_dir}/")
-    else:
-        print("Visualization failed. Check error messages above.")
-        sys.exit(1)
+    # Create visualizations
+    plot_files = visualize_benchmark(benchmark_file)
+
+    print(f"\nBenchmark visualization complete!")
+    print(f"The following visualization files were created:")
+    for plot_file in plot_files:
+        print(f"- {plot_file}")
+
+    # Additional summary of the benchmark data
+    try:
+        df = pd.read_csv(benchmark_file)
+        min_size = df["Size"].min()
+        max_size = df["Size"].max()
+        avg_time_ms = df["Time (ms)"].mean()
+        max_time_ms = df["Time (ms)"].max()
+
+        print(f"\nBenchmark Summary:")
+        print(f"- Array sizes: {min_size} to {max_size}")
+        print(f"- Average sorting time: {avg_time_ms:.2f} ms")
+        print(f"- Maximum sorting time: {max_time_ms:.2f} ms")
+        print(f"- Data points: {len(df)}")
+
+    except Exception as e:
+        print(f"Error generating summary: {e}")
 
 
 if __name__ == "__main__":

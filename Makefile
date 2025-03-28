@@ -5,7 +5,7 @@ CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip
 BIN_DIR = bin
 SRC_DIR = src
 OBJ_DIR = obj
-TARGETS = heapsort genrand_f benchmark quicksort generate_test_files
+TARGETS = heapsort genrand_f benchmark
 COMMON_OBJ = $(OBJ_DIR)/common.o
 
 .PHONY: all clean directories
@@ -26,19 +26,11 @@ heapsort: $(SRC_DIR)/heapsort_f.c $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
-quicksort: $(SRC_DIR)/quicksort_f.c $(COMMON_OBJ)
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
-	@echo "Built $@ in $(BIN_DIR)/"
-
 genrand_f: $(SRC_DIR)/genrand_f.c $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
 benchmark: $(SRC_DIR)/benchmark.c $(COMMON_OBJ)
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
-	@echo "Built $@ in $(BIN_DIR)/"
-
-generate_test_files: $(SRC_DIR)/generate_test_files.c $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 
@@ -52,19 +44,14 @@ clean:
 	rm -rf benchmark_plots
 
 # Run benchmark with default settings
-run-benchmark: benchmark heapsort quicksort genrand_f
+run-benchmark: benchmark heapsort genrand_f
 	@echo "Running benchmark with default settings..."
 	./$(BIN_DIR)/benchmark
 
 # Run benchmark with custom settings (example)
-run-custom-benchmark: benchmark heapsort quicksort genrand_f
+run-custom-benchmark: benchmark heapsort genrand_f
 	@echo "Running custom benchmark..."
 	./$(BIN_DIR)/benchmark --min 500 --max 10000 --step 500 --repeats 5
-
-# Run algorithm comparison benchmark
-run-comparison-benchmark: benchmark heapsort quicksort genrand_f
-	@echo "Running comparison benchmark..."
-	./$(BIN_DIR)/benchmark --algorithm-compare
 
 # Usage examples:
 # Compile all:
@@ -72,21 +59,14 @@ run-comparison-benchmark: benchmark heapsort quicksort genrand_f
 #
 # Compile specific target:
 #   make heapsort
-#   make quicksort
 #   make genrand_f
 #   make benchmark
 #
 # Run heapsort with command line arguments:
 #   ./bin/heapsort 5 2 9 1 7 4
 #
-# Run quicksort with command line arguments:
-#   ./bin/quicksort 5 2 9 1 7 4
-#
 # Run heapsort with input file:
 #   ./bin/heapsort -f input.txt
-#
-# Run quicksort with input file:
-#   ./bin/quicksort -f input.txt
 #
 # Run heapsort with input file and output file:
 #   ./bin/heapsort -f input.txt -o sorted.txt
@@ -105,9 +85,6 @@ run-comparison-benchmark: benchmark heapsort quicksort genrand_f
 #
 # Run benchmark with custom settings:
 #   make run-custom-benchmark
-#
-# Run algorithm comparison benchmark:
-#   make run-comparison-benchmark
 #
 # Clean:
 #   make clean

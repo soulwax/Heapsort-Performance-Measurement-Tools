@@ -1,168 +1,206 @@
-# Sorting Algorithm Benchmark Suite
+# Heapsort + Performance Measurement Tools
 
-A performance benchmarking suite for comparing sorting algorithms, specifically optimized implementations of HeapSort and QuickSort.
+This project implements a heapsort algorithm with comprehensive performance measurement tools, as well as a random number generator utility. It includes features for timing sort operations, conducting benchmarks, and visualizing algorithm performance.
 
-## Features
+## Table of Contents
 
-- **Multiple Sorting Algorithms**
-  - HeapSort: Optimized hybrid heap sort with insertion sort for small arrays
-  - QuickSort: Cache-aware implementation with median-of-three pivot selection
+- [Basic Usage](#basic-usage)
+- [Using the Programs](#using-the-programs)
+  - [Heapsort](#for-heapsort)
+  - [Random Number Generator](#for-genrand_f)
+- [Performance Measurement](#performance-measurement)
+  - [Timing Output](#timing-output)
+  - [Benchmark Utility](#benchmark-utility)
+  - [Visualization Tools](#visualization-tools)
+- [Benchmark Results](#benchmark-results)
+- [Makefile Commands](#makefile-commands)
+- [VS Code Integration](#vs-code-integration)
 
-- **Random Number Generator**
-  - Generate test data sets of arbitrary size
-  - Configurable value ranges
-  - Hash-based file naming for tracking and repeatability
+## Basic Usage
 
-- **Comprehensive Benchmarking**
-  - Single algorithm performance analysis
-  - Comparative analysis between algorithms
-  - Configurable size ranges and steps
-  - Multiple repetitions for statistical validity
+1. **Build all programs**:
 
-- **Performance Visualization**
-  - Generate plots showing sorting time vs. array size
-  - Logarithmic scale analysis for complexity validation
-  - Algorithm comparison charts
+   ```sh
+   make
+   ```
 
-## Building
+2. **Build specific programs**:
 
-```bash
-# Build all components
-make
+   ```sh
+   make heapsort
+   make genrand_f
+   make benchmark
+   ```
 
-# Build specific components
-make heapsort
-make quicksort
-make genrand_f
-make benchmark
-```
+3. **Clean the build**:
 
-## Usage Examples
+   ```sh
+   make clean
+   ```
 
-### Generating Random Numbers
+## Using the Programs
 
-```bash
-# Generate 100 random numbers (default: 1-1000 range)
-./bin/genrand_f
+### For heapsort
 
-# Generate 500 random numbers
-./bin/genrand_f -c 500
+1. **Sort numbers directly from command line**:
 
-# Generate 200 random numbers between -100 and 100
-./bin/genrand_f -c 200 -min -100 -max 100
-```
+   ```sh
+   ./bin/heapsort 5 2 9 1 7 4
+   ```
 
-### Sorting Numbers
+2. **Sort numbers from an input file**:
 
-```bash
-# Sort numbers from command line
-./bin/heapsort 5 2 9 1 7 4
-./bin/quicksort 5 2 9 1 7 4
+   ```sh
+   ./bin/heapsort -f input/randnum_fixed.txt
+   ```
 
-# Sort numbers from input file
-./bin/heapsort -f input/randnum_fixed.txt
-./bin/quicksort -f input/randnum_fixed.txt
+3. **Sort and save to output file**:
 
-# Sort and write to specified output file
-./bin/heapsort -f input/randnum_fixed.txt -o sorted_output.txt
-./bin/quicksort -f input/randnum_fixed.txt -o sorted_output.txt
+   ```sh
+   ./bin/heapsort -f input/randnum_fixed.txt -o sorted.txt
+   ```
 
-# Use cache-optimized block sorting (heapsort only)
-./bin/heapsort -f input/randnum_fixed.txt --block-sort
-```
+4. **Time-only mode (for benchmarking)**:
 
-### Running Benchmarks
+   ```sh
+   ./bin/heapsort -f input/randnum_fixed.txt --time-only
+   ```
 
-```bash
-# Run benchmark with default settings (heapsort, 1000-100000 elements)
-make run-benchmark
+   This outputs only the sorting time, useful for benchmarking.
 
-# Run custom benchmark
-make run-custom-benchmark
+### For genrand_f
 
-# Run algorithm comparison (heapsort vs quicksort)
-make run-comparison-benchmark
+1. **Generate default random numbers** (100 numbers between 1-1000):
 
-# Custom benchmark with specific options
-./bin/benchmark --min 500 --max 20000 --step 500 --repeats 5
+   ```sh
+   ./bin/genrand_f
+   ```
 
-# Benchmark specific algorithm
-./bin/benchmark --algorithm heap
-./bin/benchmark --algorithm quick
+2. **Generate a specific number of random values**:
 
-# Compare both algorithms
-./bin/benchmark --algorithm both
-# or
-./bin/benchmark --algorithm-compare
-```
+   ```sh
+   ./bin/genrand_f -c 500
+   ```
 
-### Visualizing Results
+3. **Specify range for random numbers**:
 
-```bash
-# Visualize the most recent benchmark results
-python3 visualize_benchmark.py
+   ```sh
+   ./bin/genrand_f -c 200 -min -100 -max 100
+   ```
 
-# Visualize specific benchmark results
-python3 visualize_benchmark.py benchmark_results/heapsort_benchmark_1000_100000.csv
+## Performance Measurement
 
-# Compare algorithm results
-python3 visualize_benchmark.py --compare benchmark_results/algorithm_comparison_1000_100000.csv
-```
+The project includes comprehensive tools for measuring and analyzing the performance of the heapsort algorithm.
 
-## Algorithm Details
+### Timing Output
 
-### HeapSort Implementation
-
-The HeapSort implementation features:
-
-- Hybrid approach with insertion sort for small arrays
-- Cache-friendly memory access patterns
-- Compiler hints for branch prediction
-- Block-based variant for improved cache behavior
-
-### QuickSort Implementation
-
-The QuickSort implementation features:
-
-- Median-of-three pivot selection for improved partitioning
-- Cache-friendly memory access with prefetching
-- Tail-recursive implementation to reduce stack space
-- Hybrid approach with insertion sort for small partitions
-
-## Performance Analysis
-
-The benchmark suite measures algorithm performance across different array sizes and provides insights into:
-
-- Raw sorting speed (time per N elements)
-- Algorithmic complexity (via log-log plots)
-- Comparative efficiency between algorithms
-- Memory access patterns and cache effects
-
-## Project Structure
+All sort operations automatically include timing information that measures **only the sorting algorithm** (not file I/O or other operations). The time is displayed in appropriate units (ns, μs, ms, or s) based on the magnitude:
 
 ```plaintext
-.
-├── bin/              # Compiled executables
-├── src/              # Source code
-│   ├── benchmark.c   # Benchmarking tool
-│   ├── common.c      # Common utility functions
-│   ├── common.h      # Common header
-│   ├── genrand_f.c   # Random number generator
-│   ├── heapsort_f.c  # HeapSort implementation
-│   └── quicksort_f.c # QuickSort implementation
-├── input/            # Input data files
-├── output/           # Sorted output files
-├── benchmark_results/# CSV benchmark results
-├── benchmark_plots/  # Generated visualizations
-└── Makefile          # Build configuration
+Sorting algorithm performance: Sorted 1000 items in 1.25 ms
 ```
 
-## Requirements
+### Benchmark Utility
 
-- C compiler with C11 support
-- Python 3.x with matplotlib and pandas (for visualization)
-- POSIX-compliant operating system
+The benchmark utility tests heapsort performance across a range of array sizes:
 
-## License
+1. **Run benchmark with default settings**:
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+   ```sh
+   make run-benchmark
+   ```
+
+   This tests array sizes from 1,000 to 100,000 elements in steps of 10,000.
+
+2. **Run custom benchmark**:
+
+   ```sh
+   make run-custom-benchmark
+   ```
+
+   This runs a custom benchmark with different size ranges and steps.
+
+3. **Specify custom benchmark parameters**:
+
+   ```sh
+   ./bin/benchmark --min 500 --max 10000 --step 500 --repeats 5
+   ```
+
+   Parameters:
+   - `--min`: Minimum array size
+   - `--max`: Maximum array size
+   - `--step`: Size increment between benchmarks
+   - `--repeats`: Number of repetitions for each size (for more accurate measurements)
+
+Benchmark results are saved to CSV files in the `benchmark_results` directory.
+
+### Visualization Tools
+
+A Python script is included to visualize benchmark results:
+
+```sh
+python3 visualize_benchmark.py
+```
+
+This creates three visualizations in the `benchmark_plots` directory:
+
+1. **Sort Time Plot**: Shows sorting time vs. array size
+2. **Log-Log Plot**: Log-log scale plot to help identify algorithmic complexity
+3. **Complexity Analysis**: Curve fitting to determine the algorithm's time complexity
+
+## Benchmark Results
+
+Below are sample visualizations of the HeapSort algorithm performance based on benchmark data:
+
+### Sort Time Plot
+
+This plot shows the direct relationship between array size and sorting time in milliseconds.
+
+![Sort Time Plot](benchmark_plots/heapsort_benchmark_1000_100000_sort_time.png)
+
+### Logarithmic Scale Analysis
+
+This log-log plot helps visualize the algorithmic complexity by comparing the actual performance against reference complexity lines (O(n), O(n log n), O(n²)).
+
+![Log-Log Plot](benchmark_plots/heapsort_benchmark_1000_100000_loglog.png)
+
+### Complexity Analysis
+
+This analysis uses curve fitting to determine which complexity class best describes the algorithm's performance. As expected for HeapSort, the O(n log n) curve typically provides the best fit.
+
+![Complexity Analysis](benchmark_plots/heapsort_benchmark_1000_100000_complexity.png)
+
+## Makefile Commands
+
+In addition to the basic commands, the Makefile includes:
+
+```sh
+# Build the benchmark utility
+make benchmark
+
+# Run benchmark with default settings
+make run-benchmark
+
+# Run benchmark with custom settings
+make run-custom-benchmark
+
+# Clean all generated files
+make clean
+```
+
+## VS Code Integration
+
+The project includes VS Code configuration files in the `.vscode` directory:
+
+- **tasks.json**: Defines build and benchmark tasks
+- **launch.json**: Configures debugging for all programs
+- **c_cpp_properties.json**: Sets up IntelliSense for C/C++
+- **settings.json**: Additional editor settings
+
+To use the VS Code integration:
+
+1. Open the project folder in VS Code
+2. Press `Ctrl+Shift+B` (or `Cmd+Shift+B` on Mac) to build
+3. Press `F5` to run with debugging
+4. Use the Run and Debug panel to select different launch configurations
+5. Use the Terminal menu to execute tasks like benchmarking

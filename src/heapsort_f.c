@@ -5,7 +5,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include <errno.h>  // For errno and strerror
 #include "common.h"
 
 // Define cache line size for optimizations
@@ -139,7 +138,92 @@ void blockHeapSort(int a[], int n) {
     }
 }
 
+// Count the number of integers in a file - optimized version with single pass
+int countIntegers(FILE* file) {
+    int count = 0;
+    char buffer[4096];  // Larger buffer for better I/O performance
 
+    // Reset file position to the beginning
+    rewind(file);
+
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        int in_number = 0;
+
+        for (char* p = buffer; *p; p++) {
+            if (isdigit(*p) || (*p == '-' || *p == '+')) {
+                if (!in_number) {
+                    count++;
+                    in_number = 1;
+                }
+            }
+            else if (!isspace(*p)) {
+                in_number = 0;
+            }
+            else {
+                in_number = 0;
+            }
+        }
+    }
+
+    // Reset file position to the beginning
+    rewind(file);
+    return count;
+}
+
+// Read integers from a file into an array - optimized for fewer passes
+int* readIntegers(FILE* file, int* count) {
+    *count = countIntegers(file);
+
+    if (*count == 0)
+        return NULL;
+
+    // Align to cache line boundary for better memory access
+    int* array = (int*)aligned_alloc(CACHE_LINE_SIZE, ((*count + 7) & ~7) * sizeof(int));
+    if (array == NULL)
+        return NULL;
+
+    int index = 0;
+    char buffer[4096];  // Larger buffer for better I/O performance
+
+    rewind(file);
+    while (fgets(buffer, sizeof(buffer), file) != NULL && index < *count) {
+        char* token = strtok(buffer, " \t\n,;");
+        while (token != NULL && index < *count) {
+            // Use strtol for more robust conversion
+            char* endptr;
+            long val = strtol(token, &endptr, 10);
+
+            // Only add valid integers
+            if (endptr != token) {
+                array[index++] = (int)val;
+            }
+
+            token = strtok(NULL, " \t\n,;");
+        }
+    }
+
+    *count = index;  // Update with actual count of values read
+    return array;
+}
+
+// Write sorted integers to a file
+void writeIntegers(FILE* file, int array[], int count) {
+    const int ITEMS_PER_LINE = 20;
+    for (int i = 0; i < count; i++) {
+        fprintf(file, "%d", array[i]);
+
+        // Add space if not last item
+        if (i < count - 1) {
+            fprintf(file, " ");
+
+            // Add newline for better readability
+            if ((i + 1) % ITEMS_PER_LINE == 0) {
+                fprintf(file, "\n");
+            }
+        }
+    }
+    fprintf(file, "\n");
+}
 
 void printUsage(char* programName) {
     printf("Usage:\n");
@@ -147,7 +231,6 @@ void printUsage(char* programName) {
     printf("  %s -f <input_file>                   # Sort numbers from input file\n", programName);
     printf("  %s -f <input_file> -o <output_file>  # Sort numbers from input file and write to output file\n", programName);
     printf("  %s -f <input_file> --time-only       # Only output the sorting time (for benchmarking)\n", programName);
-    printf("  %s -f <input_file> --bench-time      # Output raw time value for benchmark tool\n", programName);
     printf("  %s -f <input_file> --block-sort      # Use cache-optimized block sorting algorithm\n", programName);
 }
 
@@ -156,103 +239,54 @@ int main(int argc, char* argv[]) {
     int n = 0;
     FILE* inputFile = NULL;
     FILE* outputFile = NULL;
-    char* inputFilename = NULL;
-    int timeOnly = 0;
-    int benchTimeMode = 0;
-    int useBlockSort = 0;
     int usingFiles = 0;
-    FILE* debug_log = fopen("sort_debug.log", "a");
-    if (debug_log) {
-        fprintf(debug_log, "--- %s Debug Log ---\n", argv[0]);
-        fprintf(debug_log, "Command line: ");
-        for (int i = 0; i < argc; i++) {
-            fprintf(debug_log, "%s ", argv[i]);
-        }
-        fprintf(debug_log, "\n");
+    char* inputFilename = NULL;
+    int timeOnly = 0;     // Flag for benchmark mode
+    int useBlockSort = 0; // Flag for using block sort
+
+    // Parse command line arguments
+    if (argc < 2) {
+        printUsage(argv[0]);
+        return 1;
     }
-    // Parse command line arguments in a single pass
+
+    // Check for flags
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--bench-time") == 0) {
-            benchTimeMode = 1;
-            timeOnly = 0;  // bench-time takes precedence
-        }
-        else if (strcmp(argv[i], "--time-only") == 0) {
-            if (!benchTimeMode) {
-                timeOnly = 1;
-            }
+        if (strcmp(argv[i], "--time-only") == 0) {
+            timeOnly = 1;
         }
         else if (strcmp(argv[i], "--block-sort") == 0) {
             useBlockSort = 1;
         }
-        else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printUsage(argv[0]);
-            return 0;
-        }
-        else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+    }
+
+    // Check if using file input
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
             inputFilename = argv[i + 1];
-            i++; // Skip the filename in the next iteration
-
-            usingFiles = 1;
-
-            // Check for output file option that follows
-            if (i + 2 < argc && strcmp(argv[i + 1], "-o") == 0) {
-                outputFile = fopen(argv[i + 2], "w");
-                if (outputFile == NULL) {
-                    fprintf(stderr, "Error: Could not open output file '%s'\n", argv[i + 2]);
-                    return 1;
-                }
-                i += 2; // Skip both -o and the output filename
-            }
-        }
-        else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
-            // Handle -o when it's not immediately after -f
-            outputFile = fopen(argv[i + 1], "w");
-            if (outputFile == NULL) {
-                fprintf(stderr, "Error: Could not open output file '%s'\n", argv[i + 1]);
+            inputFile = fopen(inputFilename, "r");
+            if (inputFile == NULL) {
+                printf("Error: Could not open input file '%s'\n", inputFilename);
                 return 1;
             }
-            i++; // Skip the filename in the next iteration
-        }
-    }
+            usingFiles = 1;
 
-    // Open the input file after parsing all arguments
-    if (usingFiles) {
-        if (inputFilename == NULL) {
-            fprintf(stderr, "Error: Input filename is required with -f flag\n");
-            return 1;
-        }
-
-        inputFile = fopen(inputFilename, "r");
-        if (inputFile == NULL) {
-            if (debug_log) {
-                fprintf(debug_log, "Error: Could not open input file '%s' (errno: %d - %s)\n",
-                    inputFilename, errno, strerror(errno));
-                fclose(debug_log);
+            // Check for output file
+            if (i + 2 < argc && strcmp(argv[i + 2], "-o") == 0 && i + 3 < argc) {
+                outputFile = fopen(argv[i + 3], "w");
+                if (outputFile == NULL) {
+                    printf("Error: Could not open output file '%s'\n", argv[i + 3]);
+                    fclose(inputFile);
+                    return 1;
+                }
             }
-            fprintf(stderr, "Error: Could not open input file '%s' (errno: %d - %s)\n",
-                inputFilename, errno, strerror(errno));
-            return 1;
+            break;
         }
-    }
-
-    // Validate arguments - must have either numbers or input file
-    if (argc < 2 || (!usingFiles && argc == 2 && (timeOnly || benchTimeMode || useBlockSort))) {
-        printUsage(argv[0]);
-        return 1;
     }
 
     if (usingFiles) {
         // Read integers from file
         a = readIntegers(inputFile, &n);
-        if (a == NULL || n == 0) {
-            if (debug_log) {
-                fprintf(debug_log, "Error: Could not read integers from file: %s (count: %d)\n",
-                    inputFilename, n);
-                fclose(debug_log);
-            }
-            printf("Error: No valid integers found in the input file\n");
-            return 1;
-        }
         fclose(inputFile);
 
         if (a == NULL || n == 0) {
@@ -261,7 +295,7 @@ int main(int argc, char* argv[]) {
         }
     }
     else {
-        // Parse command line numbers
+        // Use command line arguments as before
         n = argc - 1;
         // Align the array for better memory access
         a = (int*)aligned_alloc(CACHE_LINE_SIZE, ((n + 7) & ~7) * sizeof(int));
@@ -300,20 +334,11 @@ int main(int argc, char* argv[]) {
     clock_t end_time = clock();
     double time_taken = (double)(end_time - start_time) / CLOCKS_PER_SEC;
 
-    // Benchmark time mode has highest priority and uses a very specific format
-    if (benchTimeMode) {
-        // Output ONLY the raw time value in seconds with consistent format
-        printf("%.9f\n", time_taken); // Use fixed precision for consistency
-        free(original);
-        free(a);
-        return 0;
-    }
-
-    // Format time output for normal display
+    // Format time output
     char time_output[50];
     format_time(time_taken, time_output, sizeof(time_output));
 
-    // Time-only mode has second priority
+    // In time-only mode, just print the time and exit
     if (timeOnly) {
         printf("%s\n", time_output);
         free(original);
