@@ -40,6 +40,8 @@ jobs:
             - name: Install Dependencies (macOS)
               if: matrix.os == 'macos-latest'
               run: |
+                  python -m venv venv
+                  source venv/bin/activate
                   brew install gcc make python3
                   python3 -m venv venv
                   source venv/bin/activate
