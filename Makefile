@@ -5,7 +5,7 @@ CFLAGS = -g -Wall -O2 -arch arm64 -Wl,-dead_strip
 BIN_DIR = bin
 SRC_DIR = src
 OBJ_DIR = obj
-TARGETS = heapsort genrand_f benchmark quicksort
+TARGETS = heapsort genrand_f benchmark quicksort generate_test_files
 COMMON_OBJ = $(OBJ_DIR)/common.o
 
 .PHONY: all clean directories
@@ -35,6 +35,10 @@ genrand_f: $(SRC_DIR)/genrand_f.c $(COMMON_OBJ)
 	@echo "Built $@ in $(BIN_DIR)/"
 
 benchmark: $(SRC_DIR)/benchmark.c $(COMMON_OBJ)
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
+	@echo "Built $@ in $(BIN_DIR)/"
+
+generate_test_files: $(SRC_DIR)/generate_test_files.c $(COMMON_OBJ)
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 	@echo "Built $@ in $(BIN_DIR)/"
 

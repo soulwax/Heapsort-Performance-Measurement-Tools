@@ -8,9 +8,6 @@
 #include <errno.h>  // For errno and strerror
 #include "common.h"
 
-// Define cache line size for optimizations
-#define CACHE_LINE_SIZE 64
-
 // Prefetch hint macros
 #if defined(__GNUC__) || defined(__clang__)
 #define PREFETCH(addr) __builtin_prefetch(addr)
@@ -120,7 +117,6 @@ void quickSort(int a[], int n) {
     if (n <= 1) return;
     quicksort_internal(a, 0, n - 1);
 }
-
 
 void printUsage(char* programName) {
     printf("Usage:\n");

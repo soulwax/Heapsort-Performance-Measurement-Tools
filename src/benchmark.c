@@ -66,22 +66,48 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
         return -1.0;
     }
 
+    // Try a different approach: check file content first
+    FILE* check_file = fopen(input_file, "r");
+    if (!check_file) {
+        fprintf(stderr, "Failed to open input file for content check: %s\n", input_file);
+        return -1.0;
+    }
+
+    // Read first few bytes to validate file format
+    char buffer[256];
+    size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, check_file);
+    buffer[bytes_read] = '\0';
+    fclose(check_file);
+
+    // Check if file has reasonable content (should have numbers and spaces)
+    int has_digits = 0;
+    for (int i = 0; i < bytes_read && !has_digits; i++) {
+        if (isdigit(buffer[i])) has_digits = 1;
+    }
+
+    if (!has_digits) {
+        fprintf(stderr, "Warning: Input file appears to contain no digits: %s\n", input_file);
+    }
+
+    // Attempt measurement with existing file
     double total_time = 0.0;
     int successful_runs = 0;
 
     for (int i = 0; i < repeats; i++) {
         // Create a temporary file for capturing the output
         char temp_file[256];
-        sprintf(temp_file, "/tmp/benchmark_output_%d.txt", getpid());
+        sprintf(temp_file, "/tmp/benchmark_output_%d_%d.txt", getpid(), i);
 
-        // Use the --bench-time flag and redirect output to a file to avoid pipe buffering issues
+        // Use the --bench-time flag and redirect output to a file
         char command[1024];
-        sprintf(command, "%s -f \"%s\" --bench-time > %s 2>/dev/null", sort_path, input_file, temp_file);
+        sprintf(command, "%s -f \"%s\" --bench-time > %s 2>/dev/null",
+            sort_path, input_file, temp_file);
 
         // Execute the command
         int result = system(command);
         if (result != 0) {
             fprintf(stderr, "Command failed with code %d: %s\n", result, command);
+            unlink(temp_file);
             continue;
         }
 
@@ -89,23 +115,24 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
         FILE* output_file = fopen(temp_file, "r");
         if (!output_file) {
             fprintf(stderr, "Failed to open output file: %s\n", temp_file);
+            unlink(temp_file);
             continue;
         }
 
-        char buffer[256];
-        if (fgets(buffer, sizeof(buffer), output_file) == NULL) {
+        char output_buffer[256] = { 0 };
+        if (fgets(output_buffer, sizeof(output_buffer), output_file) == NULL) {
             fprintf(stderr, "No output in file: %s\n", temp_file);
             fclose(output_file);
-            unlink(temp_file); // Delete temp file
+            unlink(temp_file);
             continue;
         }
         fclose(output_file);
-        unlink(temp_file); // Delete temp file
+        unlink(temp_file);
 
         // Parse the time as a simple floating-point value
         double time_value;
-        if (sscanf(buffer, "%lf", &time_value) != 1) {
-            fprintf(stderr, "Failed to parse time output: %s\n", buffer);
+        if (sscanf(output_buffer, "%lf", &time_value) != 1) {
+            fprintf(stderr, "Failed to parse time output: %s\n", output_buffer);
             continue;
         }
 
@@ -120,7 +147,8 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
         return total_time / successful_runs;
     }
 
-    return -1.0;  // Error indicator
+    // All runs failed
+    return -1.0;
 }
 
 void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type, int min_size, int max_size, int step, int repeats) {
@@ -207,14 +235,32 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
             return;
         }
 
-        // First generate random numbers for this size (setup phase)
+        // First generate random numbers for this size with more predictable settings
         char gen_cmd[512];
+        sprintf(gen_cmd, "%s -c %d -min 1 -max 100 > /dev/null", genrand_path, size);
+        if (system(gen_cmd) != 0) {
+            printf("Error generating random numbers\n");
+            continue;
+        }
+
+        // Find the latest generated file using our function
+        char input_file[256];
+        sprintf(input_file, "benchmark_input/test_%d.txt", size);
+
+        // Check if the file exists and is readable
+        if (access(input_file, R_OK) != 0) {
+            printf("Error: Test file %s does not exist or cannot be read\n", input_file);
+            continue;
+        }
+
+        // Skip the step of generating new random numbers for each size
+        double gen_time = 0.0; // No generation time
 
         // Start timing the array generation (for information only)
         clock_t gen_start_time = clock();
 
-        sprintf(gen_cmd, "%s -c %d > /dev/null", genrand_path, size);
-        if (system(gen_cmd) != 0) {
+        // Generate random numbers with more predictable settings
+        sprintf(gen_cmd, "%s -c %d -min 1 -max 100 > /dev/null", genrand_path, size);        if (system(gen_cmd) != 0) {
             printf("Error generating random numbers\n");
             continue;
         }
@@ -223,8 +269,6 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         clock_t gen_end_time = clock();
         double gen_time = (double)(gen_end_time - gen_start_time) / CLOCKS_PER_SEC;
 
-        // Find the latest generated file using our new function
-        char input_file[256] = { 0 };
         find_latest_file("input", "randnum_", input_file, sizeof(input_file));
 
         if (input_file[0] == '\0') {
@@ -257,6 +301,8 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
 
         // Test if the binaries work before benchmarking
         char test_cmd[512];
+        sprintf(test_cmd, "./bin/heapsort -f %s --bench-time > /dev/null 2>&1", input_file);
+        int result = system(test_cmd);
         if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
             sprintf(test_cmd, "%s -f \"%s\" --bench-time > /dev/null 2>&1", heap_sort_path, input_file);
             printf("HeapSort test: %s\n", system(test_cmd) == 0 ? "OK" : "FAILED");
