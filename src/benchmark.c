@@ -7,8 +7,15 @@
 #include <unistd.h>
 #include "common.h"
 
-// Get the time from running heapsort with time-only flag
-double measure_heapsort_time(const char* heapsort_path, const char* input_file, int repeats) {
+// Enum for algorithm type
+typedef enum {
+    HEAP_SORT,
+    QUICK_SORT,
+    BOTH_ALGORITHMS
+} AlgorithmType;
+
+// Get the time from running a sorting algorithm with time-only flag
+double measure_sort_time(const char* sort_path, const char* input_file, int repeats) {
     char command[1024];
     double total_time = 0.0;
 
@@ -23,12 +30,12 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
     close(fd);
 
     for (int i = 0; i < repeats; i++) {
-        // Run heapsort with time-only mode and capture the output
-        sprintf(command, "%s/heapsort -f %s --time-only > %s", heapsort_path, input_file, temp_output_file);
+        // Run sort with time-only mode and capture the output
+        sprintf(command, "%s -f %s --time-only > %s", sort_path, input_file, temp_output_file);
         int status = system(command);
 
         if (status != 0) {
-            printf("Error running heapsort command\n");
+            printf("Error running sort command: %s\n", command);
             unlink(temp_output_file);
             return -1.0;
         }
@@ -83,14 +90,21 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
     return total_time / repeats;
 }
 
-void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, int step, int repeats) {
+void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type, int min_size, int max_size, int step, int repeats) {
     // Create benchmark results directory
     if (!create_directory("benchmark_results")) {
         return;
     }
 
     char output_filename[256];
-    sprintf(output_filename, "benchmark_results/heapsort_benchmark_%d_%d.csv", min_size, max_size);
+
+    if (algorithm_type == BOTH_ALGORITHMS) {
+        sprintf(output_filename, "benchmark_results/algorithm_comparison_%d_%d.csv", min_size, max_size);
+    }
+    else {
+        const char* algo_name = (algorithm_type == HEAP_SORT) ? "heapsort" : "quicksort";
+        sprintf(output_filename, "benchmark_results/%s_benchmark_%d_%d.csv", algo_name, min_size, max_size);
+    }
 
     FILE* output_file = fopen(output_filename, "w");
     if (!output_file) {
@@ -99,9 +113,18 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
     }
 
     // Write CSV header
-    fprintf(output_file, "Size,Time (s),Time (ms),Formatted Time,Array Generation Time (s)\n");
+    if (algorithm_type == BOTH_ALGORITHMS) {
+        fprintf(output_file, "Size,HeapSort Time (s),HeapSort Time (ms),HeapSort Formatted Time,QuickSort Time (s),QuickSort Time (ms),QuickSort Formatted Time,Array Generation Time (s)\n");
+    }
+    else {
+        fprintf(output_file, "Size,Time (s),Time (ms),Formatted Time,Array Generation Time (s)\n");
+    }
 
-    printf("Running HeapSort Algorithm Benchmarks\n");
+    const char* algo_title = (algorithm_type == HEAP_SORT) ? "HeapSort" :
+        (algorithm_type == QUICK_SORT) ? "QuickSort" :
+        "Algorithm Comparison";
+
+    printf("Running %s Algorithm Benchmarks\n", algo_title);
     printf("=====================================\n");
     printf("Size range: %d to %d (step %d)\n", min_size, max_size, step);
     printf("Repetitions per size: %d\n\n", repeats);
@@ -145,23 +168,53 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
         // Remove newline character
         input_file[strcspn(input_file, "\n")] = 0;
 
-        // Run the sorting algorithm benchmark
-        double sort_time = measure_heapsort_time(bin_path, input_file, repeats);
+        // Create paths to the sorting binaries
+        char heap_sort_path[300], quick_sort_path[300];
+        sprintf(heap_sort_path, "%s/heapsort", bin_path);
+        sprintf(quick_sort_path, "%s/quicksort", bin_path);
 
-        if (sort_time < 0) {
-            printf("Error measuring sort time\n");
-            continue;
+        // Run the sorting algorithm benchmark
+        double heap_sort_time = -1.0;
+        double quick_sort_time = -1.0;
+        char heap_time_str[50] = "N/A";
+        char quick_time_str[50] = "N/A";
+
+        if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
+            heap_sort_time = measure_sort_time(heap_sort_path, input_file, repeats);
+            if (heap_sort_time < 0) {
+                printf("Error measuring heapsort time\n");
+                continue;
+            }
+            format_time(heap_sort_time, heap_time_str, sizeof(heap_time_str));
+            printf("HeapSort time: %s", heap_time_str);
         }
 
-        // Format time for display
-        char time_str[50];
-        format_time(sort_time, time_str, sizeof(time_str));
+        if (algorithm_type == QUICK_SORT || algorithm_type == BOTH_ALGORITHMS) {
+            quick_sort_time = measure_sort_time(quick_sort_path, input_file, repeats);
+            if (quick_sort_time < 0) {
+                printf("Error measuring quicksort time\n");
+                continue;
+            }
+            format_time(quick_sort_time, quick_time_str, sizeof(quick_time_str));
+            printf("%sQuickSort time: %s", algorithm_type == BOTH_ALGORITHMS ? ", " : "", quick_time_str);
+        }
+        printf("\n");
 
         // Write results to CSV
-        fprintf(output_file, "%d,%f,%f,%s,%f\n",
-            size, sort_time, sort_time * 1000, time_str, gen_time);
+        if (algorithm_type == BOTH_ALGORITHMS) {
+            fprintf(output_file, "%d,%f,%f,%s,%f,%f,%s,%f\n",
+                size,
+                heap_sort_time, heap_sort_time * 1000, heap_time_str,
+                quick_sort_time, quick_sort_time * 1000, quick_time_str,
+                gen_time);
+        }
+        else {
+            double sort_time = (algorithm_type == HEAP_SORT) ? heap_sort_time : quick_sort_time;
+            const char* time_str = (algorithm_type == HEAP_SORT) ? heap_time_str : quick_time_str;
 
-        printf("Sort time: %s\n", time_str);
+            fprintf(output_file, "%d,%f,%f,%s,%f\n",
+                size, sort_time, sort_time * 1000, time_str, gen_time);
+        }
     }
 
     fclose(output_file);
@@ -170,23 +223,38 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
     printf("\nBenchmark complete. Results saved to %s\n", output_filename);
     printf("Note: The benchmark focused solely on the sorting algorithm performance,\n");
     printf("      excluding file I/O operations.\n");
+
+    if (algorithm_type == BOTH_ALGORITHMS) {
+        printf("\nTo visualize the comparison results, run:\n");
+        printf("python3 visualize_benchmark.py --compare %s\n", output_filename);
+    }
+    else {
+        printf("\nTo visualize the results, run:\n");
+        printf("python3 visualize_benchmark.py %s\n", output_filename);
+    }
 }
 
 void print_usage(const char* program_name) {
     printf("Usage: %s [options]\n", program_name);
     printf("Options:\n");
-    printf("  --min SIZE       Minimum array size (default: 1000)\n");
-    printf("  --max SIZE       Maximum array size (default: 100000)\n");
-    printf("  --step SIZE      Step size between benchmarks (default: 10000)\n");
-    printf("  --repeats N      Number of repetitions per size (default: 3)\n");
-    printf("  --help           Display this help message\n");
+    printf("  --min SIZE           Minimum array size (default: 1000)\n");
+    printf("  --max SIZE           Maximum array size (default: 100000)\n");
+    printf("  --step SIZE          Step size between benchmarks (default: 10000)\n");
+    printf("  --repeats N          Number of repetitions per size (default: 3)\n");
+    printf("  --algorithm NAME     Algorithm to benchmark: 'heap', 'quick', or 'both' (default: 'heap')\n");
+    printf("  --algorithm-compare  Compare heapsort and quicksort (shorthand for --algorithm both)\n");
+    printf("  --help               Display this help message\n");
 }
 
 int main(int argc, char* argv[]) {
     int min_size = 1000;
     int max_size = 100000;
-    int step_size = 1000;
+    int step_size = 10000;
     int repeats = 3;
+    AlgorithmType algorithm = HEAP_SORT;  // Default to heapsort for backward compatibility
+
+    // Get the path to the bin directory
+    char bin_path[256] = "./bin";  // Default
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -206,6 +274,26 @@ int main(int argc, char* argv[]) {
             repeats = atoi(argv[i + 1]);
             i++;
         }
+        else if (strcmp(argv[i], "--algorithm") == 0 && i + 1 < argc) {
+            if (strcmp(argv[i + 1], "heap") == 0) {
+                algorithm = HEAP_SORT;
+            }
+            else if (strcmp(argv[i + 1], "quick") == 0) {
+                algorithm = QUICK_SORT;
+            }
+            else if (strcmp(argv[i + 1], "both") == 0) {
+                algorithm = BOTH_ALGORITHMS;
+            }
+            else {
+                fprintf(stderr, "Error: Unknown algorithm '%s'\n", argv[i + 1]);
+                print_usage(argv[0]);
+                return 1;
+            }
+            i++;
+        }
+        else if (strcmp(argv[i], "--algorithm-compare") == 0) {
+            algorithm = BOTH_ALGORITHMS;
+        }
         else if (strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -223,11 +311,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Get the path to the bin directory
-    char bin_path[256] = "./bin";  // Default
-
     // Run the benchmark
-    run_heapsort_benchmark(bin_path, min_size, max_size, step_size, repeats);
+    run_algorithm_benchmark(bin_path, algorithm, min_size, max_size, step_size, repeats);
 
     return 0;
 }
