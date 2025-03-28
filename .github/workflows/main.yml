@@ -1,0 +1,197 @@
+name: Heapsort CI/CD Pipeline
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+    workflow_dispatch: # Allow manual triggering
+
+jobs:
+    build:
+        name: Build and Test
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest]
+                include:
+                    - os: ubuntu-latest
+                      cc: gcc
+                    - os: macos-latest
+                      cc: clang
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Environment
+              run: |
+                  mkdir -p bin
+                  mkdir -p obj
+                  mkdir -p benchmark_results
+                  mkdir -p benchmark_plots
+
+            - name: Install Dependencies (Ubuntu)
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y gcc make python3-pip
+                  python3 -m pip install -r requirements.txt
+
+            - name: Install Dependencies (macOS)
+              if: matrix.os == 'macos-latest'
+              run: |
+                  brew install gcc make python3
+                  python3 -m pip install -r requirements.txt
+
+            - name: Build All Programs
+              env:
+                  CC: ${{ matrix.cc }}
+              run: make
+
+            - name: Verify Binaries
+              run: |
+                  ls -la bin/
+                  [ -f bin/heapsort ] || exit 1
+                  [ -f bin/genrand_f ] || exit 1
+                  [ -f bin/benchmark ] || exit 1
+
+            - name: Run Heapsort Tests
+              run: |
+                  # Test with command line args
+                  ./bin/heapsort 5 3 1 4 2
+
+                  # Test with file input
+                  ./bin/genrand_f -c 100
+                  INPUT_FILE=$(ls -t input/randnum_* | head -1)
+                  ./bin/heapsort -f $INPUT_FILE
+
+                  # Test with time-only mode
+                  ./bin/heapsort -f input/randnum_fixed.txt --time-only
+
+            - name: Run Small Benchmark
+              run: |
+                  # Run a small benchmark (fewer numbers to save CI time)
+                  ./bin/benchmark --min 1000 --max 5000 --step 1000 --repeats 2
+                  python3 visualize_benchmark.py $(ls -t benchmark_results/heapsort_*.csv | head -1)
+
+            - name: Archive Results
+              uses: actions/upload-artifact@v4
+              with:
+                  name: benchmark-results-${{ matrix.os }}
+                  path: |
+                      benchmark_results/
+                      benchmark_plots/
+
+    # Code analysis job
+    analyze:
+        name: Static Code Analysis
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Install cppcheck
+              run: sudo apt-get install -y cppcheck
+
+            - name: Run cppcheck
+              run: |
+                  cppcheck --enable=all --suppress=missingIncludeSystem --error-exitcode=1 src/
+
+            - name: Run clang-format check
+              uses: jidicula/clang-format-action@v4.11.0
+              with:
+                  clang-format-version: "14"
+                  check-path: "src"
+
+    # Create Release and publish benchmark reports
+    publish:
+        name: Create Release
+        needs: [build, analyze]
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Download Benchmark Results
+              uses: actions/download-artifact@v4
+              with:
+                  name: benchmark-results-ubuntu-latest
+                  path: benchmark-ubuntu
+
+            - name: Download macOS Benchmark Results
+              uses: actions/download-artifact@v4
+              with:
+                  name: benchmark-results-macos-latest
+                  path: benchmark-macos
+
+            - name: Create Release Package
+              run: |
+                  mkdir -p release
+                  cp -r bin/ src/ Makefile README.md requirements.txt release/
+                  cp -r benchmark-ubuntu/benchmark_plots release/benchmark_plots_ubuntu
+                  cp -r benchmark-macos/benchmark_plots release/benchmark_plots_macos
+                  tar -czf heapsort-release.tar.gz release/
+
+            - name: Create GitHub Release
+              id: create_release
+              uses: softprops/action-gh-release@v1
+              if: startsWith(github.ref, 'refs/tags/')
+              with:
+                  files: heapsort-release.tar.gz
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            # Only runs if this is not a tag-based release
+            - name: Upload artifacts without creating release
+              if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: heapsort-release
+                  path: heapsort-release.tar.gz
+
+    # Deploy documentation (example)
+    docs:
+        name: Deploy Documentation
+        needs: [build, analyze]
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  python -m pip install mkdocs mkdocs-material
+
+            - name: Generate Documentation
+              run: |
+                  mkdir -p docs
+                  # Create documentation from README
+                  cp README.md docs/index.md
+                  # Create API documentation
+                  echo "# Heapsort API Reference" > docs/api.md
+                  echo "## Functions" >> docs/api.md
+                  echo "### `heapSort(int a[], int n)`" >> docs/api.md
+                  echo "Main heapsort algorithm implementation." >> docs/api.md
+                  # Create sample mkdocs.yml
+                  echo "site_name: Heapsort Algorithm" > mkdocs.yml
+                  echo "theme: material" >> mkdocs.yml
+                  echo "nav:" >> mkdocs.yml
+                  echo "  - Home: index.md" >> mkdocs.yml
+                  echo "  - API Reference: api.md" >> mkdocs.yml
+                  # Build the documentation
+                  mkdocs build
+
+            - name: Deploy to GitHub Pages
+              uses: peaceiris/actions-gh-pages@v3
+              with:
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  publish_dir: ./site
