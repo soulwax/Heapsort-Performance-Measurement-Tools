@@ -223,7 +223,68 @@ int main(int argc, char* argv[]) {
     int usingFiles = 0;
     char* inputFilename = NULL;
     int timeOnly = 0;     // Flag for benchmark mode
+    int benchTimeMode = 0; // Flag for benchmark time mode
+    int debugMode = 0;
+    int verboseDebug = 0;
 
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--verbose") == 0) {
+            verboseDebug = 1;
+        }
+        else if (strcmp(argv[i], "--debug") == 0) {
+            debugMode = 1;
+        }
+        else if (strcmp(argv[i], "--bench-time") == 0) {
+            benchTimeMode = 1;
+            // Set timeOnly to 0 to prevent conflicts
+            timeOnly = 0;
+        }
+        else if (strcmp(argv[i], "--time-only") == 0) {
+            timeOnly = 1;
+        }
+        else if (strcmp(argv[i], "--block-sort") == 0) {
+            // Placeholder for block sort option
+        }
+        else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            printUsage(argv[0]);
+            return 0;
+        }
+        else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            inputFilename = argv[i + 1];
+            inputFile = fopen(inputFilename, "r");
+            if (inputFile == NULL) {
+                printf("Error: Could not open input file '%s'\n", inputFilename);
+                return 1;
+            }
+            usingFiles = 1;
+
+            // Check for output file
+            if (i + 2 < argc && strcmp(argv[i + 2], "-o") == 0 && i + 3 < argc) {
+                outputFile = fopen(argv[i + 3], "w");
+                if (outputFile == NULL) {
+                    printf("Error: Could not open output file '%s'\n", argv[i + 3]);
+                    fclose(inputFile);
+                    return 1;
+                }
+            }
+        }
+    }
+    if (verboseDebug) {
+        fprintf(stderr, "Debug: Starting sort with %d elements\n", n);
+        fprintf(stderr, "Debug: Input file: %s\n", inputFilename ? inputFilename : "none");
+        fprintf(stderr, "Debug: Output file: %s\n", outputFile ? "specified" : "none");
+        fprintf(stderr, "Debug: Time only mode: %s\n", (timeOnly ? "enabled" : "disabled"));
+        fprintf(stderr, "Debug: Benchmark time mode: %s\n", (benchTimeMode ? "enabled" : "disabled"));
+        fprintf(stderr, "Debug: Debug mode: %s\n", (debugMode ? "enabled" : "disabled"));
+        fprintf(stderr, "Debug: Verbose debug mode: %s\n", (verboseDebug ? "enabled" : "disabled"));
+
+    }
+
+    if (debugMode) {
+        printf("Debug: Program is running, input file: %s\n", inputFilename ? inputFilename : "none");
+        // If we're in debug mode, exit after showing this info
+        return 0;
+    }
     // Parse command line arguments
     if (argc < 2) {
         printUsage(argv[0]);
@@ -309,7 +370,13 @@ int main(int argc, char* argv[]) {
     // Format time output
     char time_output[50];
     format_time(time_taken, time_output, sizeof(time_output));
-
+    if (benchTimeMode) {
+        // Output ONLY the raw time value in seconds, no formatting, no units
+        printf("%f\n", time_taken);
+        free(original);
+        free(a);
+        return 0;
+    }
     // In time-only mode, just print the time and exit
     if (timeOnly) {
         printf("%s\n", time_output);

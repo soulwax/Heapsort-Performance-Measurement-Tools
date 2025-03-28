@@ -21,109 +21,64 @@ static int file_exists(const char* filename) {
     return (stat(filename, &buffer) == 0);
 }
 
-// Get the time from running a sorting algorithm with time-only flag
 double measure_sort_time(const char* sort_path, const char* input_file, int repeats) {
-    char command[1024];
-    double total_time = 0.0;
-
-    // First check if the sort binary exists
     if (!file_exists(sort_path)) {
-        printf("Error: Sort binary not found: %s\n", sort_path);
+        fprintf(stderr, "Error: Sort binary not found: %s\n", sort_path);
         return -1.0;
     }
 
-    // Check if input file exists
     if (!file_exists(input_file)) {
-        printf("Error: Input file not found: %s\n", input_file);
+        fprintf(stderr, "Error: Input file not found: %s\n", input_file);
         return -1.0;
     }
 
-    // Create a temporary file for the time output
-    char temp_output_file[] = ".temp_time_output_XXXXXX";
-    int fd = mkstemp(temp_output_file);
-
-    if (fd == -1) {
-        perror("Failed to create temporary file");
-        return -1.0;
-    }
-    close(fd);
-
-    // Handle potential errors by setting a default timeout
-    char timeout_cmd[1200];
+    double total_time = 0.0;
+    int successful_runs = 0;
 
     for (int i = 0; i < repeats; i++) {
-        // Run sort with time-only mode and capture the output
-        // Use timeout to prevent hanging if something goes wrong
-        sprintf(timeout_cmd, "timeout 10s %s -f \"%s\" --time-only > %s 2>&1",
-            sort_path, input_file, temp_output_file);
+        // Use the new --bench-time flag instead of --time-only
+        char command[1024];
+        sprintf(command, "%s -f \"%s\" --bench-time", sort_path, input_file);
 
-        int status = system(timeout_cmd);
+        FILE* pipe = popen(command, "r");
+        if (!pipe) {
+            fprintf(stderr, "Failed to execute command: %s\n", command);
+            continue;
+        }
 
+        char buffer[256];
+        if (fgets(buffer, sizeof(buffer), pipe) == NULL) {
+            fprintf(stderr, "No output from command: %s\n", command);
+            pclose(pipe);
+            continue;
+        }
+
+        // Close the pipe and check return status
+        int status = pclose(pipe);
         if (status != 0) {
-            printf("Error running sort command: %s\n", timeout_cmd);
-            printf("Check if the binary supports the --time-only flag\n");
-            unlink(temp_output_file);
-            return -1.0;
+            fprintf(stderr, "Command returned error status %d: %s\n", status, command);
+            continue;
         }
 
-        // Read the time output from the temporary file
-        FILE* time_file = fopen(temp_output_file, "r");
-        if (!time_file) {
-            perror("Failed to open temporary time file");
-            unlink(temp_output_file);
-            return -1.0;
-        }
-
-        char time_str[100];
-        if (fgets(time_str, sizeof(time_str), time_file) == NULL) {
-            printf("Failed to read time output from %s\n", temp_output_file);
-            fclose(time_file);
-            unlink(temp_output_file);
-            return -1.0;
-        }
-        fclose(time_file);
-
-        // Check if the output looks like a valid time value
-        if (strstr(time_str, "ns") == NULL &&
-            strstr(time_str, "μs") == NULL &&
-            strstr(time_str, "ms") == NULL &&
-            strstr(time_str, "s") == NULL) {
-            printf("Invalid time format: %s\n", time_str);
-            unlink(temp_output_file);
-            return -1.0;
-        }
-
-        // Parse the time value
+        // Parse the time as a simple floating-point value
         double time_value;
-        if (strstr(time_str, "ns")) {
-            sscanf(time_str, "%lf ns", &time_value);
-            time_value /= 1e9;  // Convert ns to seconds
-        }
-        else if (strstr(time_str, "μs")) {
-            sscanf(time_str, "%lf μs", &time_value);
-            time_value /= 1e6;  // Convert μs to seconds
-        }
-        else if (strstr(time_str, "ms")) {
-            sscanf(time_str, "%lf ms", &time_value);
-            time_value /= 1e3;  // Convert ms to seconds
-        }
-        else if (strstr(time_str, "s")) {
-            sscanf(time_str, "%lf s", &time_value);
-        }
-        else {
-            printf("Unknown time format: %s\n", time_str);
-            unlink(temp_output_file);
-            return -1.0;
+        if (sscanf(buffer, "%lf", &time_value) != 1) {
+            fprintf(stderr, "Failed to parse time output: %s\n", buffer);
+            continue;
         }
 
-        total_time += time_value;
+        if (time_value > 0) {
+            total_time += time_value;
+            successful_runs++;
+        }
     }
 
-    // Clean up the temporary file
-    unlink(temp_output_file);
+    // Return the average time if we got any successful runs
+    if (successful_runs > 0) {
+        return total_time / successful_runs;
+    }
 
-    // Return the average time
-    return total_time / repeats;
+    return -1.0;  // Error indicator
 }
 
 void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type, int min_size, int max_size, int step, int repeats) {
@@ -329,8 +284,8 @@ void print_usage(const char* program_name) {
 
 int main(int argc, char* argv[]) {
     int min_size = 1000;
-    int max_size = 100000;
-    int step_size = 10000;
+    int max_size = 1000000;
+    int step_size = 100000;
     int repeats = 3;
     AlgorithmType algorithm = HEAP_SORT;  // Default to heapsort for backward compatibility
 

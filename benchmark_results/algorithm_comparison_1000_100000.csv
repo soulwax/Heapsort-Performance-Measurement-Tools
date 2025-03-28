@@ -1,4 +1,0 @@
-Size,HeapSort Time (s),HeapSort Time (ms),HeapSort Formatted Time,QuickSort Time (s),QuickSort Time (ms),QuickSort Formatted Time,Array Generation Time (s)
-11000,0.000402,0.402333,402.33 μs,0.000295,0.294667,294.67 μs,0.000146
-51000,0.001607,1.606667,1.61 ms,0.001750,1.750000,1.75 ms,0.000112
-61000,0.001987,1.986667,1.99 ms,0.002203,2.203333,2.20 ms,0.000143
