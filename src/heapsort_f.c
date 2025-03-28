@@ -286,7 +286,7 @@ int main(int argc, char* argv[]) {
 
     if (usingFiles) {
         // Read integers from file
-        a = readIntegers(inputFile, &n);
+        a = readIntegersInChunks(inputFile, &n);
         fclose(inputFile);
 
         if (a == NULL || n == 0) {

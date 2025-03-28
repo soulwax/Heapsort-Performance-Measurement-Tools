@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include "common.h"
 
 // Get the time from running heapsort with time-only flag
@@ -22,13 +23,50 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
     }
     close(fd);
 
+    // Diagnostic: Check input file details
+    FILE* input_check = fopen(input_file, "r");
+    if (!input_check) {
+        fprintf(stderr, "ERROR: Cannot open input file '%s': %s\n", input_file, strerror(errno));
+        unlink(temp_output_file);
+        return -1.0;
+    }
+
+    // Check file size and first few characters
+    fseek(input_check, 0, SEEK_END);
+    long file_size = ftell(input_check);
+    rewind(input_check);
+
+    // Diagnostic: Read first few characters
+    char first_chars[100] = { 0 };
+    size_t chars_read = fread(first_chars, 1, sizeof(first_chars) - 1, input_check);
+    fclose(input_check);
+
+    fprintf(stderr, "Input file details:\n");
+    fprintf(stderr, "  Path: %s\n", input_file);
+    fprintf(stderr, "  Size: %ld bytes\n", file_size);
+    fprintf(stderr, "  First characters: '%s'\n", first_chars);
+
     for (int i = 0; i < repeats; i++) {
-        // Run heapsort with time-only mode and capture the output
-        sprintf(command, "%s/heapsort -f %s --time-only > %s", heapsort_path, input_file, temp_output_file);
+        // Diagnostic: Build and print the full command
+        sprintf(command, "%s -f \"%s\" --time-only > %s 2>&1", heapsort_path, input_file, temp_output_file);
+        fprintf(stderr, "Executing command: %s\n", command);
+
+        // Run the command and capture both stdout and stderr
         int status = system(command);
 
         if (status != 0) {
-            printf("Error running heapsort command\n");
+            fprintf(stderr, "ERROR: Heapsort command failed with status %d\n", status);
+
+            // Read and print the error output
+            FILE* error_log = fopen(temp_output_file, "r");
+            if (error_log) {
+                char error_buffer[1024];
+                while (fgets(error_buffer, sizeof(error_buffer), error_log)) {
+                    fprintf(stderr, "Command output: %s", error_buffer);
+                }
+                fclose(error_log);
+            }
+
             unlink(temp_output_file);
             return -1.0;
         }
@@ -43,7 +81,7 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
 
         char time_str[100];
         if (fgets(time_str, sizeof(time_str), time_file) == NULL) {
-            printf("Failed to read time output\n");
+            fprintf(stderr, "ERROR: Failed to read time output from %s\n", temp_output_file);
             fclose(time_file);
             unlink(temp_output_file);
             return -1.0;
@@ -68,7 +106,7 @@ double measure_heapsort_time(const char* heapsort_path, const char* input_file, 
             sscanf(time_str, "%lf s", &time_value);
         }
         else {
-            printf("Unknown time format: %s\n", time_str);
+            fprintf(stderr, "ERROR: Unknown time format: %s\n", time_str);
             unlink(temp_output_file);
             return -1.0;
         }
@@ -106,6 +144,16 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
     printf("Size range: %d to %d (step %d)\n", min_size, max_size, step);
     printf("Repetitions per size: %d\n\n", repeats);
 
+    // Ensure heapsort executable exists and is executable
+    char heapsort_full_path[512];
+    snprintf(heapsort_full_path, sizeof(heapsort_full_path), "%s/heapsort", bin_path);
+
+    if (access(heapsort_full_path, X_OK) != 0) {
+        fprintf(stderr, "Error: Heapsort executable not found or not executable at %s\n", heapsort_full_path);
+        fclose(output_file);
+        return;
+    }
+
     for (int size = min_size; size <= max_size; size += step) {
         printf("Benchmarking array size %d... ", size);
         fflush(stdout);
@@ -117,15 +165,20 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
         clock_t gen_start_time = clock();
 
         sprintf(gen_cmd, "%s/genrand_f -c %d > /dev/null", bin_path, size);
-        system(gen_cmd);
+        int gen_status = system(gen_cmd);
+
+        if (gen_status != 0) {
+            printf("Failed to generate random numbers\n");
+            continue;
+        }
 
         // End timing the array generation
         clock_t gen_end_time = clock();
         double gen_time = (double)(gen_end_time - gen_start_time) / CLOCKS_PER_SEC;
 
-        // Find the latest generated file
+        // Find the latest generated file - use a more robust method
         char find_cmd[512];
-        sprintf(find_cmd, "ls -t input/randnum_* | head -1 > .latest_file");
+        sprintf(find_cmd, "ls -t input/randnum_* | head -1 > .latest_file 2>/dev/null");
         system(find_cmd);
 
         FILE* latest_file = fopen(".latest_file", "r");
@@ -145,11 +198,23 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
         // Remove newline character
         input_file[strcspn(input_file, "\n")] = 0;
 
-        // Run the sorting algorithm benchmark
-        double sort_time = measure_heapsort_time(bin_path, input_file, repeats);
+        // Run the sorting algorithm benchmark with retry mechanism
+        double sort_time = -1.0;
+        int max_attempts = 3;
+        for (int attempt = 0; attempt < max_attempts && sort_time < 0; attempt++) {
+            sort_time = measure_heapsort_time(bin_path, input_file, repeats);
+
+            if (sort_time < 0) {
+                printf("Attempt %d failed. ", attempt + 1);
+
+                // Try regenerating the input file if it fails
+                sprintf(gen_cmd, "%s/genrand_f -c %d > /dev/null", bin_path, size);
+                system(gen_cmd);
+            }
+        }
 
         if (sort_time < 0) {
-            printf("Error measuring sort time\n");
+            printf("Failed to measure sort time after %d attempts\n", max_attempts);
             continue;
         }
 
@@ -162,6 +227,9 @@ void run_heapsort_benchmark(const char* bin_path, int min_size, int max_size, in
             size, sort_time, sort_time * 1000, time_str, gen_time);
 
         printf("Sort time: %s\n", time_str);
+
+        // Flush file to ensure results are saved periodically
+        fflush(output_file);
     }
 
     fclose(output_file);
