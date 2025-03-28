@@ -1,175 +1,177 @@
 name: Release Workflow
 
 on:
-  push:
-    tags:
-      - 'v*'
+    push:
+        tags:
+            - "v*"
 
 jobs:
-  build:
-    name: Build Release Binaries
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            cc: gcc
-            platform: linux
-          - os: macos-latest
-            cc: clang
-            platform: macos
-            
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up build environment
-      run: |
-        mkdir -p bin
-        mkdir -p obj
-    
-    - name: Install Dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc make
-    
-    - name: Install Dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install gcc make
-    
-    - name: Build Optimized Release Binaries
-      env:
-        CC: ${{ matrix.cc }}
-      run: |
-        # For release builds, optimize fully and strip debug symbols
-        sed -i.bak 's/-g -Wall -O2/-Wall -O3 -flto -march=native/g' Makefile
-        make clean
-        make
-    
-    - name: Test Binaries
-      run: |
-        # Make sure they run properly
-        ./bin/heapsort 5 4 3 2 1
-        ./bin/genrand_f -c 10
-        # Quick verification test
-        echo "4 2 7 1 5" > test.txt
-        ./bin/heapsort -f test.txt
+    build:
+        name: Build Release Binaries
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest]
+                include:
+                    - os: ubuntu-latest
+                      cc: gcc
+                      platform: linux
+                    - os: macos-latest
+                      cc: clang
+                      platform: macos
 
-    - name: Create Package
-      run: |
-        VERSION=$(echo "${{ github.ref }}" | sed -e 's/refs\/tags\/v//')
-        mkdir -p heapsort-$VERSION-${{ matrix.platform }}
-        cp -r bin README.md heapsort-$VERSION-${{ matrix.platform }}/
-        tar -czf heapsort-$VERSION-${{ matrix.platform }}.tar.gz heapsort-$VERSION-${{ matrix.platform }}
-    
-    - name: Upload Build Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: heapsort-${{ matrix.platform }}
-        path: heapsort-*.tar.gz
+        steps:
+            - uses: actions/checkout@v4
 
-  benchmark:
-    name: Performance Benchmark
-    needs: build
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc make
-        python -m pip install --upgrade pip
-        python -m pip install -r requirements.txt
-    
-    - name: Build Programs
-      run: make
-    
-    - name: Run Full Benchmark Suite
-      run: |
-        # Run comprehensive benchmarks for release
-        ./bin/benchmark --min 1000 --max 100000 --step 10000 --repeats 5
-        # Generate visualization
-        python3 visualize_benchmark.py
-    
-    - name: Archive Benchmark Results
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark-results
-        path: |
-          benchmark_results/
-          benchmark_plots/
+            - name: Set up build environment
+              run: |
+                  mkdir -p bin
+                  mkdir -p obj
 
-  create-release:
-    name: Create GitHub Release
-    needs: [build, benchmark]
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-      
-    - name: Download All Build Artifacts
-      uses: actions/download-artifact@v4
-    
-    - name: Prepare Release Assets
-      run: |
-        VERSION=$(echo "${{ github.ref }}" | sed -e 's/refs\/tags\/v//')
-        mkdir -p release
-        cp -r heapsort-linux/*.tar.gz release/
-        cp -r heapsort-macos/*.tar.gz release/
-        cp -r benchmark-results/benchmark_plots release/
-        
-        # Create a changelog from git commits since last tag
-        git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" > release/CHANGELOG.md
-    
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          release/*.tar.gz
-          release/CHANGELOG.md
-        body_path: release/CHANGELOG.md
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Install Dependencies (Ubuntu)
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y gcc make
 
-  build-docker:
-    name: Build and Push Docker Image
-    needs: create-release
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract Version
-      id: version
-      run: echo "version=$(echo ${{ github.ref }} | sed -e 's/refs\/tags\/v//')" >> $GITHUB_OUTPUT
-    
-    - name: Build and Push
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: .github/docker/Dockerfile
-        push: true
-        tags: |
-          ghcr.io/${{ github.repository_owner }}/heapsort:${{ steps.version.outputs.version }}
-          ghcr.io/${{ github.repository_owner }}/heapsort:latest
+            - name: Install Dependencies (macOS)
+              if: matrix.os == 'macos-latest'
+              run: |
+                  brew install gcc make
+
+            - name: Build Optimized Release Binaries
+              env:
+                  CC: ${{ matrix.cc }}
+              run: |
+                  # For release builds, optimize fully and strip debug symbols
+                  sed -i.bak 's/-g -Wall -O2/-Wall -O3 -flto -march=native/g' Makefile
+                  make clean
+                  make
+
+            - name: Test Binaries
+              run: |
+                  # Make sure they run properly
+                  ./bin/heapsort 5 4 3 2 1
+                  ./bin/genrand_f -c 10
+                  # Quick verification test
+                  echo "4 2 7 1 5" > test.txt
+                  ./bin/heapsort -f test.txt
+
+            - name: Create Package
+              run: |
+                  VERSION=$(echo "${{ github.ref }}" | sed -e 's/refs\/tags\/v//')
+                  mkdir -p heapsort-$VERSION-${{ matrix.platform }}
+                  cp -r bin README.md heapsort-$VERSION-${{ matrix.platform }}/
+                  tar -czf heapsort-$VERSION-${{ matrix.platform }}.tar.gz heapsort-$VERSION-${{ matrix.platform }}
+
+            - name: Upload Build Artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: heapsort-${{ matrix.platform }}
+                  path: heapsort-*.tar.gz
+
+    benchmark:
+        name: Performance Benchmark
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.10"
+
+            - name: Install Dependencies
+              run: |
+                  python -m venv venv
+                  source venv/bin/activate
+                  sudo apt-get update
+                  sudo apt-get install -y gcc make
+                  python -m pip install --upgrade pip
+                  python -m pip install -r requirements.txt
+
+            - name: Build Programs
+              run: make
+
+            - name: Run Full Benchmark Suite
+              run: |
+                  # Run comprehensive benchmarks for release
+                  ./bin/benchmark --min 1000 --max 100000 --step 10000 --repeats 5
+                  # Generate visualization
+                  python3 visualize_benchmark.py
+
+            - name: Archive Benchmark Results
+              uses: actions/upload-artifact@v4
+              with:
+                  name: benchmark-results
+                  path: |
+                      benchmark_results/
+                      benchmark_plots/
+
+    create-release:
+        name: Create GitHub Release
+        needs: [build, benchmark]
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Download All Build Artifacts
+              uses: actions/download-artifact@v4
+
+            - name: Prepare Release Assets
+              run: |
+                  VERSION=$(echo "${{ github.ref }}" | sed -e 's/refs\/tags\/v//')
+                  mkdir -p release
+                  cp -r heapsort-linux/*.tar.gz release/
+                  cp -r heapsort-macos/*.tar.gz release/
+                  cp -r benchmark-results/benchmark_plots release/
+
+                  # Create a changelog from git commits since last tag
+                  git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" > release/CHANGELOG.md
+
+            - name: Create Release
+              id: create_release
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: |
+                      release/*.tar.gz
+                      release/CHANGELOG.md
+                  body_path: release/CHANGELOG.md
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    build-docker:
+        name: Build and Push Docker Image
+        needs: create-release
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Login to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.repository_owner }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Extract Version
+              id: version
+              run: echo "version=$(echo ${{ github.ref }} | sed -e 's/refs\/tags\/v//')" >> $GITHUB_OUTPUT
+
+            - name: Build and Push
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: .github/docker/Dockerfile
+                  push: true
+                  tags: |
+                      ghcr.io/${{ github.repository_owner }}/heapsort:${{ steps.version.outputs.version }}
+                      ghcr.io/${{ github.repository_owner }}/heapsort:latest
