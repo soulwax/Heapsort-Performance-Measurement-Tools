@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "common.h"
 
 // Enum for algorithm type
@@ -14,10 +15,28 @@ typedef enum {
     BOTH_ALGORITHMS
 } AlgorithmType;
 
+// Check if a file exists and is accessible
+static int file_exists(const char* filename) {
+    struct stat buffer;
+    return (stat(filename, &buffer) == 0);
+}
+
 // Get the time from running a sorting algorithm with time-only flag
 double measure_sort_time(const char* sort_path, const char* input_file, int repeats) {
     char command[1024];
     double total_time = 0.0;
+
+    // First check if the sort binary exists
+    if (!file_exists(sort_path)) {
+        printf("Error: Sort binary not found: %s\n", sort_path);
+        return -1.0;
+    }
+
+    // Check if input file exists
+    if (!file_exists(input_file)) {
+        printf("Error: Input file not found: %s\n", input_file);
+        return -1.0;
+    }
 
     // Create a temporary file for the time output
     char temp_output_file[] = ".temp_time_output_XXXXXX";
@@ -29,13 +48,20 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
     }
     close(fd);
 
+    // Handle potential errors by setting a default timeout
+    char timeout_cmd[1200];
+
     for (int i = 0; i < repeats; i++) {
         // Run sort with time-only mode and capture the output
-        sprintf(command, "%s -f %s --time-only > %s", sort_path, input_file, temp_output_file);
-        int status = system(command);
+        // Use timeout to prevent hanging if something goes wrong
+        sprintf(timeout_cmd, "timeout 10s %s -f \"%s\" --time-only > %s 2>&1",
+            sort_path, input_file, temp_output_file);
+
+        int status = system(timeout_cmd);
 
         if (status != 0) {
-            printf("Error running sort command: %s\n", command);
+            printf("Error running sort command: %s\n", timeout_cmd);
+            printf("Check if the binary supports the --time-only flag\n");
             unlink(temp_output_file);
             return -1.0;
         }
@@ -50,12 +76,22 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
 
         char time_str[100];
         if (fgets(time_str, sizeof(time_str), time_file) == NULL) {
-            printf("Failed to read time output\n");
+            printf("Failed to read time output from %s\n", temp_output_file);
             fclose(time_file);
             unlink(temp_output_file);
             return -1.0;
         }
         fclose(time_file);
+
+        // Check if the output looks like a valid time value
+        if (strstr(time_str, "ns") == NULL &&
+            strstr(time_str, "μs") == NULL &&
+            strstr(time_str, "ms") == NULL &&
+            strstr(time_str, "s") == NULL) {
+            printf("Invalid time format: %s\n", time_str);
+            unlink(temp_output_file);
+            return -1.0;
+        }
 
         // Parse the time value
         double time_value;
@@ -129,9 +165,41 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
     printf("Size range: %d to %d (step %d)\n", min_size, max_size, step);
     printf("Repetitions per size: %d\n\n", repeats);
 
+    // Check if the required binaries exist before starting
+    char heap_sort_path[300], quick_sort_path[300];
+    sprintf(heap_sort_path, "%s/heapsort", bin_path);
+    sprintf(quick_sort_path, "%s/quicksort", bin_path);
+
+    if ((algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) && !file_exists(heap_sort_path)) {
+        fprintf(stderr, "Error: HeapSort binary not found at %s\n", heap_sort_path);
+        fclose(output_file);
+        return;
+    }
+
+    if ((algorithm_type == QUICK_SORT || algorithm_type == BOTH_ALGORITHMS) && !file_exists(quick_sort_path)) {
+        fprintf(stderr, "Error: QuickSort binary not found at %s\n", quick_sort_path);
+        fclose(output_file);
+        return;
+    }
+
+    // Check if genrand_f exists
+    char genrand_path[300];
+    sprintf(genrand_path, "%s/genrand_f", bin_path);
+    if (!file_exists(genrand_path)) {
+        fprintf(stderr, "Error: Random number generator binary not found at %s\n", genrand_path);
+        fclose(output_file);
+        return;
+    }
+
     for (int size = min_size; size <= max_size; size += step) {
         printf("Benchmarking array size %d... ", size);
         fflush(stdout);
+
+        // Create input directory if it doesn't exist
+        if (!create_directory("input")) {
+            fclose(output_file);
+            return;
+        }
 
         // First generate random numbers for this size (setup phase)
         char gen_cmd[512];
@@ -139,8 +207,11 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         // Start timing the array generation (for information only)
         clock_t gen_start_time = clock();
 
-        sprintf(gen_cmd, "%s/genrand_f -c %d > /dev/null", bin_path, size);
-        system(gen_cmd);
+        sprintf(gen_cmd, "%s -c %d > /dev/null", genrand_path, size);
+        if (system(gen_cmd) != 0) {
+            printf("Error generating random numbers\n");
+            continue;
+        }
 
         // End timing the array generation
         clock_t gen_end_time = clock();
@@ -168,10 +239,11 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         // Remove newline character
         input_file[strcspn(input_file, "\n")] = 0;
 
-        // Create paths to the sorting binaries
-        char heap_sort_path[300], quick_sort_path[300];
-        sprintf(heap_sort_path, "%s/heapsort", bin_path);
-        sprintf(quick_sort_path, "%s/quicksort", bin_path);
+        // Verify input file exists
+        if (!file_exists(input_file)) {
+            printf("Error: Input file does not exist: %s\n", input_file);
+            continue;
+        }
 
         // Run the sorting algorithm benchmark
         double heap_sort_time = -1.0;
@@ -181,22 +253,28 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
 
         if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
             heap_sort_time = measure_sort_time(heap_sort_path, input_file, repeats);
-            if (heap_sort_time < 0) {
-                printf("Error measuring heapsort time\n");
-                continue;
+            if (heap_sort_time >= 0) {
+                format_time(heap_sort_time, heap_time_str, sizeof(heap_time_str));
+                printf("HeapSort time: %s", heap_time_str);
             }
-            format_time(heap_sort_time, heap_time_str, sizeof(heap_time_str));
-            printf("HeapSort time: %s", heap_time_str);
+            else {
+                // Don't break the entire benchmark if one algorithm fails
+                printf("Error measuring HeapSort time");
+            }
         }
 
         if (algorithm_type == QUICK_SORT || algorithm_type == BOTH_ALGORITHMS) {
             quick_sort_time = measure_sort_time(quick_sort_path, input_file, repeats);
-            if (quick_sort_time < 0) {
-                printf("Error measuring quicksort time\n");
-                continue;
+            if (quick_sort_time >= 0) {
+                format_time(quick_sort_time, quick_time_str, sizeof(quick_time_str));
+                printf("%sQuickSort time: %s",
+                    (algorithm_type == BOTH_ALGORITHMS && heap_sort_time >= 0) ? ", " : "",
+                    quick_time_str);
             }
-            format_time(quick_sort_time, quick_time_str, sizeof(quick_time_str));
-            printf("%sQuickSort time: %s", algorithm_type == BOTH_ALGORITHMS ? ", " : "", quick_time_str);
+            else {
+                printf("%sError measuring QuickSort time",
+                    (algorithm_type == BOTH_ALGORITHMS && heap_sort_time >= 0) ? ", " : "");
+            }
         }
         printf("\n");
 
@@ -215,6 +293,9 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
             fprintf(output_file, "%d,%f,%f,%s,%f\n",
                 size, sort_time, sort_time * 1000, time_str, gen_time);
         }
+
+        // Flush the output file to ensure partial results are saved
+        fflush(output_file);
     }
 
     fclose(output_file);
