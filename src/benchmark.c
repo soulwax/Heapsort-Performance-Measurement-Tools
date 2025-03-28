@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>  // For directory operations
 #include "common.h"
 
 // Enum for algorithm type
@@ -19,6 +20,39 @@ typedef enum {
 static int file_exists(const char* filename) {
     struct stat buffer;
     return (stat(filename, &buffer) == 0);
+}
+
+// Find the latest generated file - use direct file search instead of relying on external commands
+void find_latest_file(const char* directory, const char* prefix, char* result_path, size_t path_size) {
+    DIR* dir;
+    struct dirent* entry;
+    time_t latest_time = 0;
+    struct stat file_stat;
+
+    // Initialize result path to empty string
+    result_path[0] = '\0';
+
+    if ((dir = opendir(directory)) == NULL) {
+        fprintf(stderr, "Error opening directory: %s\n", directory);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, prefix, strlen(prefix)) == 0) {
+            char full_path[512];
+            snprintf(full_path, sizeof(full_path), "%s/%s", directory, entry->d_name);
+
+            if (stat(full_path, &file_stat) == 0) {
+                if (file_stat.st_mtime > latest_time) {
+                    latest_time = file_stat.st_mtime;
+                    strncpy(result_path, full_path, path_size);
+                    result_path[path_size - 1] = '\0'; // Ensure null termination
+                }
+            }
+        }
+    }
+
+    closedir(dir);
 }
 
 double measure_sort_time(const char* sort_path, const char* input_file, int repeats) {
@@ -36,29 +70,37 @@ double measure_sort_time(const char* sort_path, const char* input_file, int repe
     int successful_runs = 0;
 
     for (int i = 0; i < repeats; i++) {
-        // Use the new --bench-time flag instead of --time-only
-        char command[1024];
-        sprintf(command, "%s -f \"%s\" --bench-time", sort_path, input_file);
+        // Create a temporary file for capturing the output
+        char temp_file[256];
+        sprintf(temp_file, "/tmp/benchmark_output_%d.txt", getpid());
 
-        FILE* pipe = popen(command, "r");
-        if (!pipe) {
-            fprintf(stderr, "Failed to execute command: %s\n", command);
+        // Use the --bench-time flag and redirect output to a file to avoid pipe buffering issues
+        char command[1024];
+        sprintf(command, "%s -f \"%s\" --bench-time > %s 2>/dev/null", sort_path, input_file, temp_file);
+
+        // Execute the command
+        int result = system(command);
+        if (result != 0) {
+            fprintf(stderr, "Command failed with code %d: %s\n", result, command);
+            continue;
+        }
+
+        // Read the output from the temporary file
+        FILE* output_file = fopen(temp_file, "r");
+        if (!output_file) {
+            fprintf(stderr, "Failed to open output file: %s\n", temp_file);
             continue;
         }
 
         char buffer[256];
-        if (fgets(buffer, sizeof(buffer), pipe) == NULL) {
-            fprintf(stderr, "No output from command: %s\n", command);
-            pclose(pipe);
+        if (fgets(buffer, sizeof(buffer), output_file) == NULL) {
+            fprintf(stderr, "No output in file: %s\n", temp_file);
+            fclose(output_file);
+            unlink(temp_file); // Delete temp file
             continue;
         }
-
-        // Close the pipe and check return status
-        int status = pclose(pipe);
-        if (status != 0) {
-            fprintf(stderr, "Command returned error status %d: %s\n", status, command);
-            continue;
-        }
+        fclose(output_file);
+        unlink(temp_file); // Delete temp file
 
         // Parse the time as a simple floating-point value
         double time_value;
@@ -150,6 +192,15 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         printf("Benchmarking array size %d... ", size);
         fflush(stdout);
 
+        // Calculate approximate memory needed (each array needs size * sizeof(int) bytes)
+        size_t memory_needed = size * sizeof(int) * 4; // Original + sorted arrays in both algorithms
+        if (memory_needed > 1024 * 1024 * 1024) { // More than 1GB
+            printf("Warning: Size %d would require approximately %zu MB of memory\n",
+                size, memory_needed / (1024 * 1024));
+            printf("This exceeds reasonable limits for this benchmark. Skipping...\n");
+            continue;
+        }
+
         // Create input directory if it doesn't exist
         if (!create_directory("input")) {
             fclose(output_file);
@@ -172,32 +223,47 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
         clock_t gen_end_time = clock();
         double gen_time = (double)(gen_end_time - gen_start_time) / CLOCKS_PER_SEC;
 
-        // Find the latest generated file
-        char find_cmd[512];
-        sprintf(find_cmd, "ls -t input/randnum_* | head -1 > .latest_file");
-        system(find_cmd);
+        // Find the latest generated file using our new function
+        char input_file[256] = { 0 };
+        find_latest_file("input", "randnum_", input_file, sizeof(input_file));
 
-        FILE* latest_file = fopen(".latest_file", "r");
-        if (!latest_file) {
+        if (input_file[0] == '\0') {
             printf("Failed to find latest generated file\n");
             continue;
         }
 
-        char input_file[256];
-        if (fgets(input_file, sizeof(input_file), latest_file) == NULL) {
-            printf("Failed to read latest file path\n");
-            fclose(latest_file);
-            continue;
+        printf("Input file: %s\n", input_file);
+
+        // Check the file size
+        struct stat file_stat;
+        if (stat(input_file, &file_stat) == 0) {
+            printf("Input file size: %ld bytes\n", file_stat.st_size);
+
+            // If file is very large, try to inspect the first few lines
+            if (file_stat.st_size > 1024 * 1024) { // More than 1MB
+                printf("Large input file detected. Checking content format...\n");
+                FILE* check_file = fopen(input_file, "r");
+                if (check_file) {
+                    char buffer[256];
+                    if (fgets(buffer, sizeof(buffer), check_file)) {
+                        printf("First line sample: %s\n", buffer);
+                    }
+                    fclose(check_file);
+                }
+            }
         }
-        fclose(latest_file);
 
-        // Remove newline character
-        input_file[strcspn(input_file, "\n")] = 0;
+        printf("Testing sort binaries...\n");
 
-        // Verify input file exists
-        if (!file_exists(input_file)) {
-            printf("Error: Input file does not exist: %s\n", input_file);
-            continue;
+        // Test if the binaries work before benchmarking
+        char test_cmd[512];
+        if (algorithm_type == HEAP_SORT || algorithm_type == BOTH_ALGORITHMS) {
+            sprintf(test_cmd, "%s -f \"%s\" --bench-time > /dev/null 2>&1", heap_sort_path, input_file);
+            printf("HeapSort test: %s\n", system(test_cmd) == 0 ? "OK" : "FAILED");
+        }
+        if (algorithm_type == QUICK_SORT || algorithm_type == BOTH_ALGORITHMS) {
+            sprintf(test_cmd, "%s -f \"%s\" --bench-time > /dev/null 2>&1", quick_sort_path, input_file);
+            printf("QuickSort test: %s\n", system(test_cmd) == 0 ? "OK" : "FAILED");
         }
 
         // Run the sorting algorithm benchmark
@@ -254,7 +320,6 @@ void run_algorithm_benchmark(const char* bin_path, AlgorithmType algorithm_type,
     }
 
     fclose(output_file);
-    system("rm -f .latest_file");
 
     printf("\nBenchmark complete. Results saved to %s\n", output_filename);
     printf("Note: The benchmark focused solely on the sorting algorithm performance,\n");

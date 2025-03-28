@@ -36,10 +36,10 @@ int create_directory(const char* path) {
             return 0;
         }
         printf("Created directory: %s\n", path);
-    }
+        }
 
     return 1;
-}
+    }
 
 // Function to extract filename from path
 const char* get_filename(const char* path) {
@@ -63,4 +63,100 @@ uint64_t hash_string(const char* str) {
     }
 
     return hash;
+}
+
+// Count the number of integers in a file
+int countIntegers(FILE * file) {
+    int count = 0;
+    int num;
+
+    // Reset file position to beginning
+    rewind(file);
+
+    // Count how many integers we can successfully parse
+    while (fscanf(file, "%d", &num) == 1) {
+        count++;
+    }
+
+    // Reset file position to beginning
+    rewind(file);
+    return count;
+}
+
+// Read integers from a file into an array
+int* readIntegers(FILE * file, int* count) {
+    // First, count the integers in the file
+    *count = countIntegers(file);
+
+    if (*count == 0) {
+        fprintf(stderr, "No integers found in file\n");
+        return NULL;
+    }
+
+    // Log the count for debugging
+    fprintf(stderr, "Found %d integers in the file\n", *count);
+
+    // Allocate memory for the integers with proper alignment
+    size_t alloc_size = (((*count + 7) & ~7) * sizeof(int));
+    int* array = (int*)aligned_alloc(CACHE_LINE_SIZE, alloc_size);
+
+    if (array == NULL) {
+        fprintf(stderr, "Memory allocation failed for %zu bytes\n", alloc_size);
+        return NULL;
+    }
+
+    // Reset file position to beginning
+    rewind(file);
+
+    // Read integers one by one
+    int index = 0;
+    int num;
+
+    // Simple integer parsing - read until EOF or count is reached
+    while (index < *count && fscanf(file, "%d", &num) == 1) {
+        array[index++] = num;
+
+        // Skip any non-digit characters (spaces, newlines, etc.)
+        int ch;
+        while ((ch = fgetc(file)) != EOF && !isdigit(ch) && ch != '-' && ch != '+') {
+            // Just skip
+        }
+
+        // If we found a digit or sign, push it back
+        if (ch != EOF) {
+            ungetc(ch, file);
+        }
+    }
+
+    // Update the actual count
+    *count = index;
+
+    // Debugging output
+    fprintf(stderr, "Successfully read %d integers\n", index);
+
+    if (index == 0) {
+        free(array);
+        return NULL;
+    }
+
+    return array;
+}
+
+// Write integers to a file
+void writeIntegers(FILE * file, int array[], int count) {
+    const int ITEMS_PER_LINE = 20;
+    for (int i = 0; i < count; i++) {
+        fprintf(file, "%d", array[i]);
+
+        // Add space if not last item
+        if (i < count - 1) {
+            fprintf(file, " ");
+
+            // Add newline for better readability
+            if ((i + 1) % ITEMS_PER_LINE == 0) {
+                fprintf(file, "\n");
+            }
+        }
+    }
+    fprintf(file, "\n");
 }
